@@ -19,6 +19,12 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
 
+
+import torchFI as tfi
+from torchFI.injection import FI
+from util.log import *
+
+
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
@@ -195,6 +201,11 @@ def validate(val_loader, model, criterion, args):
             if args.gpu is not None:
                 input = input.cuda(args.gpu, non_blocking=True)
             target = target.cuda(args.gpu, non_blocking=True)
+
+            fi = FI(model)
+            model.conv1 = tfi.FIConv2d(fi, model.conv1.weight, 3, 64, kernel_size=7, 
+            stride=2, padding=3, bias=False)
+            model.fc = tfi.FILinear(fi, model.fc.weight, model.fc.bias, 512 * 4, 1000)
 
             # compute output
             output = model(input)
