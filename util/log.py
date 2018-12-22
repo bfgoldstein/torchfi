@@ -16,6 +16,9 @@ def logError(message):
 
 injectionLogMsg = "Injection Log ===>"
 
+def logInjectionWarning(message):
+    print(bcolors.HEADER + injectionLogMsg + bcolors.ENDC + bcolors.WARNING + message + bcolors.ENDC)
+
 def logInjectionBit(message, bit):
     print(bcolors.HEADER + injectionLogMsg + bcolors.ENDC + bcolors.WARNING + message + bcolors.ENDC
             + bcolors.FAIL + str(bit) + bcolors.ENDC)

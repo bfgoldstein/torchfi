@@ -71,6 +71,15 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
 
+
+parser.add_argument('-i', '--injection', dest='injection', action='store_true',
+                    help='apply FI model')
+parser.add_argument('--layer', default=0, type=int,
+                    help='Layer to inject fault.')
+parser.add_argument('-l', '--log', dest='log', action='store_true',
+                    help='turn loging on')
+
+
 best_acc1 = 0
 
 
@@ -96,20 +105,22 @@ def main():
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
-    ngpus_per_node = torch.cuda.device_count()
-    if args.multiprocessing_distributed:
-        # Since we have ngpus_per_node processes per node, the total world_size
-        # needs to be adjusted accordingly
-        args.world_size = ngpus_per_node * args.world_size
-        # Use torch.multiprocessing.spawn to launch distributed processes: the
-        # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+    if args.gpu is not None:
+        ngpus_per_node = torch.cuda.device_count()
+        if args.multiprocessing_distributed:
+            # Since we have ngpus_per_node processes per node, the total world_size
+            # needs to be adjusted accordingly
+            args.world_size = ngpus_per_node * args.world_size
+            # Use torch.multiprocessing.spawn to launch distributed processes: the
+            # main_worker process function
+            mp.spawn(main_gpu_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        else:
+            # Simply call main_worker function
+            main_gpu_worker(args.gpu, ngpus_per_node, args)
     else:
-        # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args)
+        main_cpu_worker(args)
 
-
-def main_worker(gpu, ngpus_per_node, args):
+def main_gpu_worker(gpu, ngpus_per_node, args):
     global best_acc1
     args.gpu = gpu
 
@@ -186,6 +197,50 @@ def main_worker(gpu, ngpus_per_node, args):
         return
 
 
+def main_cpu_worker(args):
+    global best_acc1
+
+    # create model
+    if args.pretrained:
+        print("=> using pre-trained model '{}'".format(args.arch))
+        model = models.__dict__[args.arch](pretrained=True)
+    else:
+        print("=> creating model '{}'".format(args.arch))
+        model = models.__dict__[args.arch]()
+
+    # DataParallel will divide and allocate batch_size to all available CPUs
+    if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
+        model.features = torch.nn.DataParallel(model.features)
+        model.cpu()
+    else:
+        # Model are saved into self.module when using DataParellel with CPU only
+        model = torch.nn.DataParallel(model).module
+
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss()
+
+    cudnn.benchmark = True
+
+    # Data loading code
+    valdir = os.path.join(args.data, 'val')
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
+    val_loader = torch.utils.data.DataLoader(
+        datasets.ImageFolder(valdir, transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+        ])),
+        batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=False)
+
+    if args.evaluate:
+        validate(val_loader, model, criterion, args)
+        return
+
+
 def validate(val_loader, model, criterion, args):
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -200,12 +255,25 @@ def validate(val_loader, model, criterion, args):
         for i, (input, target) in enumerate(val_loader):
             if args.gpu is not None:
                 input = input.cuda(args.gpu, non_blocking=True)
-            target = target.cuda(args.gpu, non_blocking=True)
+                target = target.cuda(args.gpu, non_blocking=True)
 
-            fi = FI(model)
-            model.conv1 = tfi.FIConv2d(fi, model.conv1.weight, 3, 64, kernel_size=7, 
-            stride=2, padding=3, bias=False)
-            model.fc = tfi.FILinear(fi, model.fc.weight, model.fc.bias, 512 * 4, 1000)
+            # applying faulty injection scheme
+            fi = FI(model, mode=args.injection, layer=args.layer, log=args.log)
+            layerName, faultyLayer = fi.createFaultyLayer()
+
+            if not isinstance(faultyLayer, dict):
+                model._modules[layerName] = faultyLayer
+            else:
+                for blockIdx in faultyLayer.keys():
+                    # Iterate over Blottleneck objects
+                    for blockLayerName, fLayer in faultyLayer[blockIdx]:
+                        # Switch original layers with faulty layers
+                        if blockLayerName == "downsample":
+                            for downsampleIdx, downsampleLayer in fLayer:
+                                model._modules[layerName][blockIdx]._modules[blockLayerName]._modules[downsampleIdx] = downsampleLayer
+                        else:
+                            model._modules[layerName][blockIdx]._modules[blockLayerName] = fLayer
+
 
             # compute output
             output = model(input)
@@ -229,6 +297,7 @@ def validate(val_loader, model, criterion, args):
                       'Acc@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                        i, len(val_loader), batch_time=batch_time, loss=losses,
                        top1=top1, top5=top5))
+            break
 
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
