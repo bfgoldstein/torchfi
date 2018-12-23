@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 import torch.nn as nn
  
@@ -15,25 +16,29 @@ class FIConv2d(nn.Conv2d):
         self.name = name
         self.weight = weight
 
-    def forward(self, input):        
-        tensorShape = list(input.data.size())
-        
-        if self.fi.log:
-            logWarning("\tInjecting Fault into feature data of Conv2d " + self.name +  " layer. tensorShape=" + str(tensorShape))
-        
-        faulty_res = self.fi.injectFeatures(input.data, tensorShape)
+    def forward(self, input):
+        if self.fi.injectionMode:
+            randFeatWeights = np.random.randint(0, 2)
 
-        for batch, (channel, feat_row, feat_col, faulty_val) in enumerate(faulty_res):
-            input.data[batch][channel][feat_row][feat_col] = faulty_val
+            if randFeatWeights:
+                tensorShape = list(input.data.size())
+                
+                if self.fi.log:
+                    logWarning("\tInjecting Fault into feature data of Conv2d " + self.name +  " layer. tensorShape=" + str(tensorShape))
+                
+                faulty_res = self.fi.injectFeatures(input.data, tensorShape)
 
-        tensorShape = list(self.weight.data.size())
-    
-        if self.fi.log:
-            logWarning("\tInjecting Fault into weight data of Conv2d " + self.name +  " layer. tensorShape=" + str(tensorShape))
-    
-        filter, channel, feat_row, feat_col, faulty_val = self.fi.injectWeights(self.weight.data, tensorShape)
+                for batch, (channel, feat_row, feat_col, faulty_val) in enumerate(faulty_res):
+                    input.data[batch][channel][feat_row][feat_col] = faulty_val
+            else:
+                tensorShape = list(self.weight.data.size())
+            
+                if self.fi.log:
+                    logWarning("\tInjecting Fault into weight data of Conv2d " + self.name +  " layer. tensorShape=" + str(tensorShape))
+            
+                filter, channel, feat_row, feat_col, faulty_val = self.fi.injectWeights(self.weight.data, tensorShape)
 
-        self.weight.data[filter][channel][feat_row][feat_col] = faulty_val
+                self.weight.data[filter][channel][feat_row][feat_col] = faulty_val
 
         return super(FIConv2d, self).forward(input)
 
@@ -50,32 +55,36 @@ class FILinear(nn.Linear):
         self.bias = bias
 
     def forward(self, input):
-        tensorShape = list(input.data.size())
-        
-        if self.fi.log:
-            logWarning("\tInjecting Fault into feature data of Liner " + self.name +  " layer. tensorShape=" + str(tensorShape))
-        
-        faulty_res = self.fi.injectFeatures(input.data, tensorShape)
+        if self.fi.injectionMode:
+            randFeatWeights = np.random.randint(0, 2)
 
-        if tensorShape == 3:
-            for batch, (channel, feat_idx, faulty_val) in enumerate(faulty_res):
-                input.data[batch][channel][feat_idx] = faulty_val
-        else:
-            for batch, (feat_idx, faulty_val) in enumerate(faulty_res):
-                input.data[batch][feat_idx] = faulty_val
+            if randFeatWeights:
+                tensorShape = list(input.data.size())
+                
+                if self.fi.log:
+                    logWarning("\tInjecting Fault into feature data of Liner " + self.name +  " layer. tensorShape=" + str(tensorShape))
+                
+                faulty_res = self.fi.injectFeatures(input.data, tensorShape)
 
-        tensorShape = list(self.weight.data.size())
-        
-        if self.fi.log:
-            logWarning("\tInjecting Fault into weight data of Liner " + self.name +  " layer. tensorShape=" + str(tensorShape))
-        
-        faulty_res = self.fi.injectWeights(self.weight.data, tensorShape)
+                if tensorShape == 3:
+                    for batch, (channel, feat_idx, faulty_val) in enumerate(faulty_res):
+                        input.data[batch][channel][feat_idx] = faulty_val
+                else:
+                    for batch, (feat_idx, faulty_val) in enumerate(faulty_res):
+                        input.data[batch][feat_idx] = faulty_val
+            else:
+                tensorShape = list(self.weight.data.size())
+                
+                if self.fi.log:
+                    logWarning("\tInjecting Fault into weight data of Liner " + self.name +  " layer. tensorShape=" + str(tensorShape))
+                
+                faulty_res = self.fi.injectWeights(self.weight.data, tensorShape)
 
-        if tensorShape == 3:
-            filter, channel, feat_idx, faulty_val = faulty_res
-            self.weight.data[filter][channel][feat_idx] = faulty_val
-        else:
-            filter, feat_idx, faulty_val = faulty_res
-            self.weight.data[filter][feat_idx] = faulty_val
+                if tensorShape == 3:
+                    filter, channel, feat_idx, faulty_val = faulty_res
+                    self.weight.data[filter][channel][feat_idx] = faulty_val
+                else:
+                    filter, feat_idx, faulty_val = faulty_res
+                    self.weight.data[filter][feat_idx] = faulty_val
 
         return super(FILinear, self).forward(input)
