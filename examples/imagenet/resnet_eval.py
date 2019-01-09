@@ -78,7 +78,8 @@ parser.add_argument('--layer', default=0, type=int,
                     help='Layer to inject fault.')
 parser.add_argument('-l', '--log', dest='log', action='store_true',
                     help='turn loging on')
-
+parser.add_argument('-n', '--niter', dest='niter', default=0, type=int,
+                    help='Number of iterations to run fault injection')
 
 best_acc1 = 0
 
@@ -243,13 +244,48 @@ def main_cpu_worker(args):
 
 def validate(val_loader, model, criterion, args):
     batch_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
-
+    top1_golden = AverageMeter()
+    top5_golden = AverageMeter()
+    sdcs = SDCMeter()
+    
     # switch to evaluate mode
     model.eval()
 
+    # Golden Run
+    with torch.no_grad():
+        end = time.time()
+        for i, (input, target) in enumerate(val_loader):
+            if args.gpu is not None:
+                input = input.cuda(args.gpu, non_blocking=True)
+                target = target.cuda(args.gpu, non_blocking=True)
+            
+            # compute output
+            output = model(input)
+
+            # measure accuracy
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            top1_golden.update(acc1[0], input.size(0))
+            top5_golden.update(acc5[0], input.size(0))
+
+            pred = topNPred(output, target, topk=(1,5))
+            sdcs.updateGoldenBatchPred(pred)
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % args.print_freq == 0:
+                print('Golden Run: [{0}/{1}]\t'
+                      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                      'Acc@1 {top1_golden.val:.3f} ({top1_golden.avg:.3f})\t'
+                      'Acc@5 {top5_golden.val:.3f} ({top5_golden.avg:.3f})'.format(
+                       i, len(val_loader), batch_time=batch_time, top1_golden=top1_golden, top5_golden=top5_golden))
+            
+    batch_time.reset()
+    top1_faulty = AverageMeter()
+    top5_faulty = AverageMeter()
+
+    # Faulty Run
     with torch.no_grad():
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
@@ -277,32 +313,37 @@ def validate(val_loader, model, criterion, args):
 
             # compute output
             output = model(input)
-            loss = criterion(output, target)
-
-            # measure accuracy and record loss
+            
+            # measure accuracy
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
-            losses.update(loss.item(), input.size(0))
-            top1.update(acc1[0], input.size(0))
-            top5.update(acc5[0], input.size(0))
+            top1_faulty.update(acc1[0], input.size(0))
+            top5_faulty.update(acc5[0], input.size(0))
+
+            pred = topNPred(output, target, topk=(1,5))
+            sdcs.updateFaultyBatchPred(pred)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
 
             if i % args.print_freq == 0:
-                print('Test: [{0}/{1}]\t'
+                print('Faulty Run: [{0}/{1}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                      'Acc@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                      'Acc@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                       i, len(val_loader), batch_time=batch_time, loss=losses,
-                       top1=top1, top5=top5))
-            break
+                      'Acc@1 {top1_faulty.val:.3f} ({top1_faulty.avg:.3f})\t'
+                      'Acc@5 {top5_faulty.val:.3f} ({top5_faulty.avg:.3f})'.format(
+                       i, len(val_loader), batch_time=batch_time, top1_faulty=top1_faulty, top5_faulty=top5_faulty))
+            
+        print(' * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
+              .format(top1_golden=top1_golden, top5_golden=top5_golden))
 
-        print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
-              .format(top1=top1, top5=top5))
+        print(' * Acc@1 {top1_faulty.avg:.3f} Acc@5 {top5_faulty.avg:.3f}'
+              .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty))
 
-    return top1.avg
+        sdcs.calculteSDCs()
+        
+        print(' * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
+              .format(sdc=sdcs))
+    return
 
 
 class AverageMeter(object):
@@ -320,7 +361,42 @@ class AverageMeter(object):
         self.val = val
         self.sum += val * n
         self.count += n
-        self.avg = self.sum / self.count
+        self.avg = self.sum / float(self.count)
+
+
+class SDCMeter(object):
+    """Stores the SDCs probabilities"""
+    def __init__(self):
+        self.reset()
+
+    def updateAcc(self, acc1, acc5):
+        self.acc1 = acc1
+        self.acc5 = acc5
+
+    def updateGoldenBatchPred(self, predTensor):
+        self.goldenPred.append(predTensor)
+
+    def updateFaultyBatchPred(self, predTensor):
+        self.faultyPred.append(predTensor)
+
+    def calculteSDCs(self):
+        top1Sum = 0
+        top5Sum = 0
+        for goldenTensor, faultyTensor in zip(self.goldenPred, self.faultyPred):
+            correct = goldenTensor.ne(faultyTensor)
+            top1Sum += correct[:1].view(-1).int().sum(0, keepdim=True)
+            top5Sum += correct[:5].view(-1).int().sum(0, keepdim=True)
+        # calculate top1 and top5 SDCs by dividing sum to numBatches * batchSize
+        self.top1SDC = float(top1Sum[0]) / float(len(self.goldenPred) * len(self.goldenPred[0][0]))
+        self.top5SDC = float(top5Sum[0]) / float(len(self.goldenPred) * len(self.goldenPred[0][0]))
+
+    def reset(self):
+        self.acc1 = 0
+        self.acc5 = 0
+        self.top1SDC = 0.0
+        self.top5SDC = 0.0
+        self.goldenPred = []
+        self.faultyPred = []
 
 
 def accuracy(output, target, topk=(1,)):
@@ -329,7 +405,8 @@ def accuracy(output, target, topk=(1,)):
         maxk = max(topk)
         batch_size = target.size(0)
 
-        _, pred = output.topk(maxk, 1, True, True)
+        acc, pred = output.topk(maxk, 1, True, True)
+        # t() == transpose tensor
         pred = pred.t()
         correct = pred.eq(target.view(1, -1).expand_as(pred))
 
@@ -338,6 +415,27 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
+
+
+def topNPred(output, target, topk=(1,)):
+    """Return label prediction from top 5 classes"""
+    with torch.no_grad():
+        maxk = max(topk)
+        _, pred = output.topk(maxk, 1, True, True)
+    return pred.t()
+
+
+def correctPred(output, target, topk=(1,)):
+    """Computes the correct top k predictions for the specified values of k"""
+    with torch.no_grad():
+        maxk = max(topk)
+        
+        _, pred = output.topk(maxk, 1, True, True)
+        
+        # t() == transpose tensor
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+    return correct
 
 
 if __name__ == '__main__':
