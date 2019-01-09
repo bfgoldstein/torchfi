@@ -14,7 +14,7 @@ def logError(message):
 ##  Injection Loging
 ##
 
-injectionLogMsg = "Injection Log ===>"
+injectionLogMsg = "Injection Log ===>\t "
 
 def logInjectionWarning(message):
     print(bcolors.HEADER + injectionLogMsg + bcolors.ENDC + bcolors.WARNING + message + bcolors.ENDC)
@@ -22,6 +22,10 @@ def logInjectionWarning(message):
 def logInjectionBit(message, bit):
     print(bcolors.HEADER + injectionLogMsg + bcolors.ENDC + bcolors.WARNING + message + bcolors.ENDC
             + bcolors.FAIL + str(bit) + bcolors.ENDC)
+
+def logInjectionNode(message, index):
+    print(bcolors.HEADER + injectionLogMsg + bcolors.ENDC + bcolors.WARNING + message + bcolors.ENDC
+            + bcolors.FAIL + str(index) + bcolors.ENDC)
 
 def logInjectionVal(message_orig, orig_val, message_corr, corr_val):
     print(bcolors.HEADER + injectionLogMsg + bcolors.ENDC 

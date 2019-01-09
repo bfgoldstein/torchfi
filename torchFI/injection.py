@@ -104,6 +104,9 @@ class FI(object):
             feature_size = tensorShape
             fault_idx = np.random.randint(0, feature_size)
             
+            if self.log:
+                logInjectionNode("Node index:", [fault_idx])
+
             fault_val = flipFloat(tensorData[fault_idx], bit=self.bit, log=self.log)
 
             faulty_res.append((fault_idx, fault_val))
@@ -116,7 +119,10 @@ class FI(object):
             for batch_idx in xrange(0, batches_size):
                 channel_idx = np.random.randint(0, channels_size)
                 feat_idx = np.random.randint(0, feat_size)
-                 
+
+                if self.log:
+                    logInjectionNode("Node index:", [batch_idx, channel_idx, feat_idx])
+
                 faulty_val = flipFloat(tensorData[batch_idx][channel_idx][feat_idx], bit=self.bit, 
                             log=self.log) 
         
@@ -131,7 +137,10 @@ class FI(object):
                 channel_idx = np.random.randint(0, channels_size)
                 feat_row_idx = np.random.randint(0, feat_row_size)
                 feat_col_idx = np.random.randint(0, feat_col_size)
-
+                
+                if self.log:
+                    logInjectionNode("Node index:", [batch_idx, channel_idx, feat_row_idx, feat_col_idx])
+                
                 faulty_val = flipFloat(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], bit=self.bit, log=self.log) 
 
                 faulty_res.append((channel_idx, feat_row_idx, feat_col_idx, faulty_val))
@@ -143,7 +152,10 @@ class FI(object):
 
             for batch_idx in xrange(0, batches_size):
                 feat_idx = np.random.randint(0, feat_size)
-                 
+
+                if self.log:
+                    logInjectionNode("Node index:", [batch_idx, feat_idx])
+ 
                 faulty_val = flipFloat(tensorData[batch_idx][feat_idx], bit=self.bit, log=self.log)
 
                 faulty_res.append((feat_idx, faulty_val))
@@ -158,6 +170,9 @@ class FI(object):
             feature_size = tensorShape
             fault_idx = np.random.randint(0, feature_size)
             
+            if self.log:
+                logInjectionNode("Node index:", [fault_idx])
+
             fault_val = flipFloat(tensorData[fault_idx], bit=self.bit, log=self.log)
 
             faulty_res.append((fault_idx, fault_val))
@@ -170,7 +185,10 @@ class FI(object):
             filter_idx = np.random.randint(0, filters_size)
             channel_idx = np.random.randint(0, num_channels)
             feat_idx = np.random.randint(0, feat_size)
-                 
+
+            if self.log:
+                logInjectionNode("Node index:", [filter_idx, channel_idx, feat_idx])
+
             faulty_val = flipFloat(tensorData[filter_idx][channel_idx][feat_idx], bit=self.bit, 
                         log=self.log) 
 
@@ -184,6 +202,9 @@ class FI(object):
             feat_row_idx = np.random.randint(0, feat_row_size)
             feat_col_idx = np.random.randint(0, feat_col_size)
 
+            if self.log:
+                logInjectionNode("Node index:", [filter_idx, channel_idx, feat_row_idx, feat_col_idx])
+
             faulty_val = flipFloat(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
                         bit=self.bit, log=self.log) 
          
@@ -192,16 +213,20 @@ class FI(object):
         else:
             filters_size, feat_size = tensorShape
 
-            filters_idx = np.random.randint(0, filters_size)
+            filter_idx = np.random.randint(0, filters_size)
             feat_idx = np.random.randint(0, feat_size)
 
-            faulty_val = flipFloat(tensorData[filters_idx][feat_idx], bit=self.bit, log=self.log)
+            if self.log:
+                logInjectionNode("Node index:", [filter_idx, feat_idx])
 
-            return (filters_idx, feat_idx, faulty_val)
+            faulty_val = flipFloat(tensorData[filter_idx][feat_idx], bit=self.bit, log=self.log)
+
+            return (filter_idx, feat_idx, faulty_val)
 
 
     def setinjectionMode(self, mode):
-        logInjectionWarning("\tSetting injection mode to " + str(mode))
+        if self.log:
+            logInjectionWarning("\tSetting injection mode to " + str(mode))
         self.injectionMode = mode
 
 
