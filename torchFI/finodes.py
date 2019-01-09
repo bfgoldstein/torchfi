@@ -2,7 +2,7 @@ import math
 import numpy as np
 
 import torch.nn as nn
- 
+
 from util.log import *
 
 class FIConv2d(nn.Conv2d):
@@ -18,6 +18,8 @@ class FIConv2d(nn.Conv2d):
 
     def forward(self, input):
         if self.fi.injectionMode:
+            # decide where to apply injection
+            # weights = 0, activations = 1 
             randFeatWeights = np.random.randint(0, 2)
 
             if randFeatWeights:
@@ -30,7 +32,13 @@ class FIConv2d(nn.Conv2d):
 
                 for batch, (channel, feat_row, feat_col, faulty_val) in enumerate(faulty_res):
                     input.data[batch][channel][feat_row][feat_col] = faulty_val
+
+                return nn.functional.conv2d(input, self.weight, self.bias, self.stride,
+                                self.padding, self.dilation, self.groups)
             else:
+                # create new tensor to apply FI
+                weightFI = self.weight.clone()
+
                 tensorShape = list(self.weight.data.size())
             
                 if self.fi.log:
@@ -38,8 +46,12 @@ class FIConv2d(nn.Conv2d):
             
                 filter, channel, feat_row, feat_col, faulty_val = self.fi.injectWeights(self.weight.data, tensorShape)
 
-                self.weight.data[filter][channel][feat_row][feat_col] = faulty_val
-
+                weightFI.data[filter][channel][feat_row][feat_col] = faulty_val
+                #self.weight.data[filter][channel][feat_row][feat_col] = faulty_val
+        
+                return nn.functional.conv2d(input, weightFI, self.bias, self.stride,
+                                self.padding, self.dilation, self.groups)
+        
         return super(FIConv2d, self).forward(input)
 
 
@@ -56,6 +68,8 @@ class FILinear(nn.Linear):
 
     def forward(self, input):
         if self.fi.injectionMode:
+            # decide where to apply injection
+            # weights = 0, activations = 1 
             randFeatWeights = np.random.randint(0, 2)
 
             if randFeatWeights:
@@ -72,7 +86,12 @@ class FILinear(nn.Linear):
                 else:
                     for batch, (feat_idx, faulty_val) in enumerate(faulty_res):
                         input.data[batch][feat_idx] = faulty_val
+
+                return nn.functional.linear(input, self.weight, self.bias)
             else:
+                # create new tensor to apply FI
+                weightFI = self.weight.clone()
+
                 tensorShape = list(self.weight.data.size())
                 
                 if self.fi.log:
@@ -82,9 +101,11 @@ class FILinear(nn.Linear):
 
                 if tensorShape == 3:
                     filter, channel, feat_idx, faulty_val = faulty_res
-                    self.weight.data[filter][channel][feat_idx] = faulty_val
+                    weightFI.data[filter][channel][feat_idx] = faulty_val
                 else:
                     filter, feat_idx, faulty_val = faulty_res
-                    self.weight.data[filter][feat_idx] = faulty_val
+                    weightFI.data[filter][feat_idx] = faulty_val
 
+                return nn.functional.linear(input, weightFI, self.bias)
+        
         return super(FILinear, self).forward(input)
