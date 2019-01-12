@@ -81,8 +81,6 @@ parser.add_argument('-l', '--log', dest='log', action='store_true',
 parser.add_argument('-n', '--niter', dest='niter', default=0, type=int,
                     help='Number of iterations to run fault injection')
 
-best_acc1 = 0
-
 
 def main():
     args = parser.parse_args()
@@ -122,11 +120,10 @@ def main():
         main_cpu_worker(args)
 
 def main_gpu_worker(gpu, ngpus_per_node, args):
-    global best_acc1
     args.gpu = gpu
 
     if args.gpu is not None:
-        print("Use GPU: {} for training".format(args.gpu))
+        print("Use GPU: {} for inference".format(args.gpu))
 
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
@@ -199,8 +196,6 @@ def main_gpu_worker(gpu, ngpus_per_node, args):
 
 
 def main_cpu_worker(args):
-    global best_acc1
-
     # create model
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
@@ -332,17 +327,24 @@ def validate(val_loader, model, criterion, args):
                       'Acc@1 {top1_faulty.val:.3f} ({top1_faulty.avg:.3f})\t'
                       'Acc@5 {top5_faulty.val:.3f} ({top5_faulty.avg:.3f})'.format(
                        i, len(val_loader), batch_time=batch_time, top1_faulty=top1_faulty, top5_faulty=top5_faulty))
-            
-        print(' * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
-              .format(top1_golden=top1_golden, top5_golden=top5_golden))
+        
+        from util.format_display import bcolors
 
-        print(' * Acc@1 {top1_faulty.avg:.3f} Acc@5 {top5_faulty.avg:.3f}'
-              .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty))
+        print(bcolors.OKGREEN + 'Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
+              .format(top1_golden=top1_golden, top5_golden=top5_golden) + bcolors.ENDC)
 
+        print(bcolors.OKBLUE + 'Faulty Run * Acc@1 {top1_faulty.avg:.3f} Acc@5 {top5_faulty.avg:.3f}'
+              .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty) + bcolors.ENDC)
+
+        print('Diff * Acc@1 {top1_diff:.3f} Acc@5 {top5_diff:.3f}'
+              .format(top1_diff=(top1_golden.avg - top1_faulty.avg), top5_diff=(top5_golden.avg - top5_faulty.avg)))
+        
         sdcs.calculteSDCs()
         
-        print(' * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
-              .format(sdc=sdcs))
+        print(bcolors.FAIL + ' * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
+              .format(sdc=sdcs) + bcolors.ENDC)
+
+
     return
 
 
@@ -385,10 +387,14 @@ class SDCMeter(object):
         for goldenTensor, faultyTensor in zip(self.goldenPred, self.faultyPred):
             correct = goldenTensor.ne(faultyTensor)
             top1Sum += correct[:1].view(-1).int().sum(0, keepdim=True)
-            top5Sum += correct[:5].view(-1).int().sum(0, keepdim=True)
+            for goldenRow, faultyRow in zip(goldenTensor.t(), faultyTensor.t()):
+                if goldenRow[0] not in faultyRow:
+                    top5Sum += 1
         # calculate top1 and top5 SDCs by dividing sum to numBatches * batchSize
         self.top1SDC = float(top1Sum[0]) / float(len(self.goldenPred) * len(self.goldenPred[0][0]))
-        self.top5SDC = float(top5Sum[0]) / float(len(self.goldenPred) * len(self.goldenPred[0][0]))
+        self.top5SDC = float(top5Sum) / float(len(self.goldenPred) * len(self.goldenPred[0][0]))
+        self.top1SDC *= 100
+        self.top5SDC *= 100
 
     def reset(self):
         self.acc1 = 0
