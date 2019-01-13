@@ -76,10 +76,11 @@ parser.add_argument('-i', '--injection', dest='injection', action='store_true',
                     help='apply FI model')
 parser.add_argument('--layer', default=0, type=int,
                     help='Layer to inject fault.')
+parser.add_argument('--bit', default=None, type=int,
+                    help='Bit to inject fault.')
+
 parser.add_argument('-l', '--log', dest='log', action='store_true',
                     help='turn loging on')
-parser.add_argument('-n', '--niter', dest='niter', default=0, type=int,
-                    help='Number of iterations to run fault injection')
 
 
 def main():
@@ -240,6 +241,7 @@ def validate(val_loader, model, criterion, args):
     logConfig("injection", "{}".format(args.injection))
     if args.injection:
         logConfig("layer", "{}".format(args.layer))
+        logConfig("bit", "{}".format(args.bit))
     logConfig("batch size", "{}".format(args.batch_size))
 
     batch_time = AverageMeter()
@@ -293,7 +295,7 @@ def validate(val_loader, model, criterion, args):
                 target = target.cuda(args.gpu, non_blocking=True)
 
             # applying faulty injection scheme
-            fi = FI(model, mode=args.injection, layer=args.layer, log=args.log)
+            fi = FI(model, mode=args.injection, layer=args.layer, bit=args.bit, log=args.log)
             layerName, faultyLayer = fi.createFaultyLayer()
 
             if not isinstance(faultyLayer, dict):
