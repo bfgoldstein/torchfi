@@ -95,10 +95,6 @@ def main():
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
 
-    if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
-
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
 
@@ -204,6 +200,7 @@ def main_cpu_worker(args):
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
 
+
     # DataParallel will divide and allocate batch_size to all available CPUs
     if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
         model.features = torch.nn.DataParallel(model.features)
@@ -238,6 +235,13 @@ def main_cpu_worker(args):
 
 
 def validate(val_loader, model, criterion, args):
+    # loging configs to screen
+    logConfig("model", "{}".format(args.arch))
+    logConfig("injection", "{}".format(args.injection))
+    if args.injection:
+        logConfig("layer", "{}".format(args.layer))
+    logConfig("batch size", "{}".format(args.batch_size))
+
     batch_time = AverageMeter()
     top1_golden = AverageMeter()
     top5_golden = AverageMeter()
@@ -341,7 +345,7 @@ def validate(val_loader, model, criterion, args):
         
         sdcs.calculteSDCs()
         
-        print(bcolors.FAIL + ' * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
+        print(bcolors.FAIL + 'SDCs * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
               .format(sdc=sdcs) + bcolors.ENDC)
 
 

@@ -1,4 +1,4 @@
-from format_display import bcolors
+from format_display import *
 
 logMsg = "Log ===>"
 
@@ -8,6 +8,17 @@ def logWarning(message):
 
 def logError(message):
     print(bcolors.HEADER + logMsg + bcolors.ENDC + bcolors.WARNING + message + bcolors.ENDC)
+
+
+##
+##  Config Loging
+##
+
+configLogMsg = "Config Log ===>\t "
+
+def logConfig(argName, argValue):
+    print(fg.CYAN + configLogMsg + fg.ENDC + fg.RED + argName + fg.ENDC + "\t" +
+             bcolors.WARNING + argValue + bcolors.ENDC)
 
 
 ##
