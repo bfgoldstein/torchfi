@@ -68,27 +68,6 @@ class FI(object):
                                             downsampleObj.padding, downsampleObj.dilation, downsampleObj.groups, downsampleObj.bias)
                         downsampleLayers.append((downsampleName, faultyLayer))
                 blocks[randIdxBlockFault].append((blockLayerName, downsampleLayers))
-
-            # # Sequential Object
-            # for blockIdx, blockObj in enumerate(layerObj):
-            #     blocks[blockIdx] = []
-            #     # Bottleneck Object
-            #     for blockLayerName, blockLayerObj in blockObj._modules.items():
-            #         # Layers inside Bottleneck
-            #         if isinstance(blockLayerObj, torch.nn.modules.conv.Conv2d):
-            #             faultyLayer = FIConv2d(self, layerName + "_Bottleneck_" + str(blockIdx) + "_" + blockLayerName, blockLayerObj.weight, blockLayerObj.in_channels, 
-            #                                 blockLayerObj.out_channels, blockLayerObj.kernel_size, blockLayerObj.stride, blockLayerObj.padding, 
-            #                                 blockLayerObj.dilation, blockLayerObj.groups, blockLayerObj.bias)
-            #             blocks[blockIdx].append((blockLayerName, faultyLayer))
-            #         if blockLayerName == "downsample" and isinstance(blockLayerObj, torch.nn.modules.Sequential):
-            #             downsampleLayers = []
-            #             for downsampleName, downsampleObj in blockLayerObj._modules.items():
-            #                 if isinstance(downsampleObj, torch.nn.modules.conv.Conv2d):
-            #                     faultyLayer = FIConv2d(self, layerName + "_Bottleneck_" + str(blockIdx) + "_" + blockLayerName + "_" + downsampleName, downsampleObj.weight, 
-            #                                         downsampleObj.in_channels, downsampleObj.out_channels, downsampleObj.kernel_size, downsampleObj.stride,
-            #                                         downsampleObj.padding, downsampleObj.dilation, downsampleObj.groups, downsampleObj.bias)
-            #                     downsampleLayers.append((downsampleName, faultyLayer))
-            #             blocks[blockIdx].append((blockLayerName, downsampleLayers))
             
             return layerName, blocks
         else:
