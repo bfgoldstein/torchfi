@@ -77,7 +77,7 @@ parser.add_argument('-i', '--injection', dest='injection', action='store_true',
 parser.add_argument('--layer', default=0, type=int,
                     help='Layer to inject fault.')
 parser.add_argument('--bit', default=None, type=int,
-                    help='Bit to inject fault.')
+                    help='Bit to inject fault. MSB=0 and LSB=31')
 
 parser.add_argument('-l', '--log', dest='log', action='store_true',
                     help='turn loging on')
@@ -289,28 +289,28 @@ def validate(val_loader, model, criterion, args):
     # Faulty Run
     with torch.no_grad():
         end = time.time()
+
+        # applying faulty injection scheme
+        fi = FI(model, mode=args.injection, layer=args.layer, bit=args.bit, log=args.log)
+        layerName, faultyLayer = fi.createFaultyLayer()
+
+        if not isinstance(faultyLayer, dict):
+            model._modules[layerName] = faultyLayer
+        else:
+            for blockIdx in faultyLayer.keys():
+                # Iterate over Blottleneck objects
+                for blockLayerName, fLayer in faultyLayer[blockIdx]:
+                    # Switch original layers with faulty layers
+                    if blockLayerName == "downsample":
+                        for downsampleIdx, downsampleLayer in fLayer:
+                            model._modules[layerName][blockIdx]._modules[blockLayerName]._modules[downsampleIdx] = downsampleLayer
+                    else:
+                        model._modules[layerName][blockIdx]._modules[blockLayerName] = fLayer
+
         for i, (input, target) in enumerate(val_loader):
             if args.gpu is not None:
                 input = input.cuda(args.gpu, non_blocking=True)
                 target = target.cuda(args.gpu, non_blocking=True)
-
-            # applying faulty injection scheme
-            fi = FI(model, mode=args.injection, layer=args.layer, bit=args.bit, log=args.log)
-            layerName, faultyLayer = fi.createFaultyLayer()
-
-            if not isinstance(faultyLayer, dict):
-                model._modules[layerName] = faultyLayer
-            else:
-                for blockIdx in faultyLayer.keys():
-                    # Iterate over Blottleneck objects
-                    for blockLayerName, fLayer in faultyLayer[blockIdx]:
-                        # Switch original layers with faulty layers
-                        if blockLayerName == "downsample":
-                            for downsampleIdx, downsampleLayer in fLayer:
-                                model._modules[layerName][blockIdx]._modules[blockLayerName]._modules[downsampleIdx] = downsampleLayer
-                        else:
-                            model._modules[layerName][blockIdx]._modules[blockLayerName] = fLayer
-
 
             # compute output
             output = model(input)
@@ -334,21 +334,19 @@ def validate(val_loader, model, criterion, args):
                       'Acc@5 {top5_faulty.val:.3f} ({top5_faulty.avg:.3f})'.format(
                        i, len(val_loader), batch_time=batch_time, top1_faulty=top1_faulty, top5_faulty=top5_faulty))
         
-        from util.format_display import bcolors
+        print('Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
+              .format(top1_golden=top1_golden, top5_golden=top5_golden))
 
-        print(bcolors.OKGREEN + 'Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
-              .format(top1_golden=top1_golden, top5_golden=top5_golden) + bcolors.ENDC)
+        print('Faulty Run * Acc@1 {top1_faulty.avg:.3f} Acc@5 {top5_faulty.avg:.3f}'
+              .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty))
 
-        print(bcolors.OKBLUE + 'Faulty Run * Acc@1 {top1_faulty.avg:.3f} Acc@5 {top5_faulty.avg:.3f}'
-              .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty) + bcolors.ENDC)
-
-        print('Diff * Acc@1 {top1_diff:.3f} Acc@5 {top5_diff:.3f}'
+        print('Acc@1 {top1_diff:.3f} Acc@5 {top5_diff:.3f}'
               .format(top1_diff=(top1_golden.avg - top1_faulty.avg), top5_diff=(top5_golden.avg - top5_faulty.avg)))
         
         sdcs.calculteSDCs()
         
-        print(bcolors.FAIL + 'SDCs * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
-              .format(sdc=sdcs) + bcolors.ENDC)
+        print('SDCs * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
+              .format(sdc=sdcs))
 
 
     return
