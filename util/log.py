@@ -17,8 +17,7 @@ def logError(message):
 configLogMsg = "Config Log ===>\t "
 
 def logConfig(argName, argValue):
-    print(fg.CYAN + configLogMsg + fg.ENDC + fg.RED + argName + fg.ENDC + "\t" +
-             bcolors.WARNING + argValue + bcolors.ENDC)
+    print(configLogMsg + argName + "\t" + argValue)
 
 
 ##
