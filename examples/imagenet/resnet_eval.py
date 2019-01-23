@@ -82,6 +82,16 @@ parser.add_argument('--bit', default=None, type=int,
 parser.add_argument('-l', '--log', dest='log', action='store_true',
                     help='turn loging on')
 
+parser.add_argument('--scores', dest='scores', action='store_true',
+                    help='turn scores loging on')
+parser.add_argument('--suffix-scores', dest='fidScores', default='scores', type=str,
+                    help='suffix of scores filename (prefix _golden.txt and _faulty.txt)')
+
+parser.add_argument('--deltas', dest='deltas', action='store_true',
+                    help='turn deltas loging on')
+parser.add_argument('--suffix-deltas', dest='fidDeltas', default='deltas', type=str,
+                    help='suffix of deltas filename (prefix _full.txt, _correct.txt and _miss.txt)')
+
 
 def main():
     args = parser.parse_args()
@@ -268,8 +278,9 @@ def validate(val_loader, model, criterion, args):
             top1_golden.update(acc1[0], input.size(0))
             top5_golden.update(acc5[0], input.size(0))
 
-            pred = topNPred(output, target, topk=(1,5))
-            sdcs.updateGoldenBatchPred(pred)
+            scores, predictions = topN(output, target, topk=(1,5))
+            sdcs.updateGoldenBatchPred(predictions)
+            sdcs.updateGoldenBatchScore(scores)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -320,8 +331,15 @@ def validate(val_loader, model, criterion, args):
             top1_faulty.update(acc1[0], input.size(0))
             top5_faulty.update(acc5[0], input.size(0))
 
-            pred = topNPred(output, target, topk=(1,5))
-            sdcs.updateFaultyBatchPred(pred)
+            scores, predictions = topN(output, target, topk=(1,5))
+            sdcs.updateFaultyBatchPred(predictions)
+            sdcs.updateFaultyBatchScore(scores)
+
+            if args.deltas:
+                deltas, delta_miss, delta_correct = calculateDeltas(sdcs.goldenPred[i], sdcs.goldenScores[i], output)
+                sdcs.deltas.append(deltas)
+                sdcs.delta_miss.append(delta_miss)
+                sdcs.delta_correct.append(delta_correct)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -333,7 +351,7 @@ def validate(val_loader, model, criterion, args):
                       'Acc@1 {top1_faulty.val:.3f} ({top1_faulty.avg:.3f})\t'
                       'Acc@5 {top5_faulty.val:.3f} ({top5_faulty.avg:.3f})'.format(
                        i, len(val_loader), batch_time=batch_time, top1_faulty=top1_faulty, top5_faulty=top5_faulty))
-        
+            
         print('Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
               .format(top1_golden=top1_golden, top5_golden=top5_golden))
 
@@ -347,6 +365,12 @@ def validate(val_loader, model, criterion, args):
         
         print('SDCs * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
               .format(sdc=sdcs))
+
+        if args.scores:
+            sdcs.writeScores(args.fidScores)
+
+        if args.deltas:
+            sdcs.writeDeltas(args.fidDeltas)
 
 
     return
@@ -379,11 +403,17 @@ class SDCMeter(object):
         self.acc1 = acc1
         self.acc5 = acc5
 
-    def updateGoldenBatchPred(self, predTensor):
-        self.goldenPred.append(predTensor)
+    def updateGoldenBatchPred(self, predTensors):
+        self.goldenPred.append(predTensors)
 
-    def updateFaultyBatchPred(self, predTensor):
-        self.faultyPred.append(predTensor)
+    def updateFaultyBatchPred(self, predTensors):
+        self.faultyPred.append(predTensors)
+
+    def updateGoldenBatchScore(self, scoreTensors):
+        self.goldenScores.append(scoreTensors)
+
+    def updateFaultyBatchScore(self, scoreTensors):
+        self.faultyScores.append(scoreTensors)
 
     def calculteSDCs(self):
         top1Sum = 0
@@ -400,6 +430,40 @@ class SDCMeter(object):
         self.top1SDC *= 100
         self.top5SDC *= 100
 
+    def writeScores(self, fidSuffixName):
+        def writeFID(fidScore, scores):
+            with open(fidScore, 'w') as fscore:
+                for scoreTensor in scores:
+                    tSize = scoreTensor.size()
+                    row = tSize[0]
+                    cols = tSize[1]
+                    for x in xrange(0, row):
+                        for y in xrange(0, cols):
+                            fscore.write("%2.4f " % scoreTensor[x][y])
+                        fscore.write("\n")
+        cwd = os.getcwd()
+        fidGolden = cwd + '/' + fidSuffixName + '_golden.txt'
+        fidFaulty = cwd + '/' + fidSuffixName + '_faulty.txt'
+        writeFID(fidGolden, self.goldenScores)
+        writeFID(fidFaulty, self.faultyScores)
+
+    def writeDeltas(self, fidDeltas):
+        def writeFID(fidPath, deltaList):
+            with open(fidPath, 'w') as fid:
+                for batchList in deltaList:
+                    for val in batchList:
+                        fid.write("%2.4f " % val)
+
+        cwd = os.getcwd()
+        fidFull = cwd + '/' + fidDeltas + "_full.txt"
+        fidMiss = cwd + '/' + fidDeltas + "_miss.txt"
+        fidCorrect = cwd + '/' + fidDeltas + "_correct.txt"
+       
+        writeFID(fidFull, self.deltas)
+        writeFID(fidMiss, self.delta_miss)
+        writeFID(fidCorrect, self.delta_correct)
+
+
     def reset(self):
         self.acc1 = 0
         self.acc5 = 0
@@ -407,6 +471,11 @@ class SDCMeter(object):
         self.top5SDC = 0.0
         self.goldenPred = []
         self.faultyPred = []
+        self.goldenScores = []
+        self.faultyScores = []
+        self.deltas = []
+        self.delta_miss = []
+        self.delta_correct = []
 
 
 def accuracy(output, target, topk=(1,)):
@@ -427,12 +496,12 @@ def accuracy(output, target, topk=(1,)):
         return res
 
 
-def topNPred(output, target, topk=(1,)):
+def topN(output, target, topk=(1,)):
     """Return label prediction from top 5 classes"""
     with torch.no_grad():
         maxk = max(topk)
-        _, pred = output.topk(maxk, 1, True, True)
-    return pred.t()
+        scores, pred = output.topk(maxk, 1, True, True)
+    return scores.t(), pred.t()
 
 
 def correctPred(output, target, topk=(1,)):
@@ -446,6 +515,29 @@ def correctPred(output, target, topk=(1,)):
         pred = pred.t()
         correct = pred.eq(target.view(1, -1).expand_as(pred))
     return correct
+
+def calculateDeltas(goldenPred, goldenScores, faultyOutput):
+    with torch.no_grad():
+        scores, pred = faultyOutput.topk(1, 1, True, True)
+        fpred = pred.t()
+        fscores = scores.t()
+        
+        deltas = []
+        delta_miss = []
+        delta_correct = []
+
+        for idx in range(0, len(goldenPred[0])):
+            if goldenPred[0][idx] == fpred[0][idx]:
+                delta = goldenScores[0][idx] - fscores[0][idx]
+                delta_correct.append(delta)
+                deltas.append(delta)
+            else:
+                delta = goldenScores[0][idx] - faultyOutput[idx][goldenPred[0][idx]]
+                delta_miss.append(delta)
+                deltas.append(delta)
+
+        return deltas, delta_miss, delta_correct
+
 
 
 if __name__ == '__main__':
