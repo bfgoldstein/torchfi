@@ -11,18 +11,24 @@ class FIConv2d(nn.Conv2d):
                 dilation=1, groups=1, bias=True):
         super(FIConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, 
             groups, bias)
-
+        
         self.fi = fi
         self.name = name
         self.weight = weight
 
     def forward(self, input):
         if self.fi.injectionMode:
-            # decide where to apply injection
-            # weights = 0, activations = 1 
-            randFeatWeights = np.random.randint(0, 2)
+            # XNOR Operation
+            # True only if both injectionFeatures and injectionWeights are True or False
+            # False if one of them is True 
+            if not(self.fi.injectionFeatures ^ self.fi.injectionWeights):
+                # decide where to apply injection
+                # weights = 0, activations = 1 
+                locInjection = np.random.randint(0, 2)
+            else:
+                locInjection = self.fi.injectionFeatures
 
-            if randFeatWeights:
+            if locInjection:
                 tensorShape = list(input.data.size())
                 
                 if self.fi.log:
@@ -68,11 +74,17 @@ class FILinear(nn.Linear):
 
     def forward(self, input):
         if self.fi.injectionMode:
-            # decide where to apply injection
-            # weights = 0, activations = 1 
-            randFeatWeights = np.random.randint(0, 2)
+            # XNOR Operation
+            # True only if both injectionFeatures and injectionWeights are True or False
+            # False if one of them is True 
+            if not(self.fi.injectionFeatures ^ self.fi.injectionWeights):
+                # decide where to apply injection
+                # weights = 0, activations = 1 
+                locInjection = np.random.randint(0, 2)
+            else:
+                locInjection = self.fi.injectionFeatures
 
-            if randFeatWeights:
+            if locInjection:
                 tensorShape = list(input.data.size())
                 
                 if self.fi.log:

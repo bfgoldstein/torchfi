@@ -11,12 +11,14 @@ from util.log import *
 
 class FI(object):
 
-    def __init__(self, model, mode=False, bit=None, log=False, layer=0):
+    def __init__(self, model, mode=False, bit=None, log=False, layer=0, fiFeatures=True, fiWeights=True):
         self.model = model
         self.layer = layer
         self.bit = bit
         self.log = log
         self.injectionMode = mode
+        self.injectionFeatures = fiFeatures
+        self.injectionWeights = fiWeights
 
     def createFaultyLayer(self):
         layerName, layerObj = self.model._modules.items()[self.layer]
@@ -203,7 +205,7 @@ class FI(object):
             return (filter_idx, feat_idx, faulty_val)
 
 
-    def setinjectionMode(self, mode):
+    def setInjectionMode(self, mode):
         if self.log:
             logInjectionWarning("\tSetting injection mode to " + str(mode))
         self.injectionMode = mode

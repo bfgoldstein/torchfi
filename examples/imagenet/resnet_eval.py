@@ -78,6 +78,10 @@ parser.add_argument('--layer', default=0, type=int,
                     help='Layer to inject fault.')
 parser.add_argument('--bit', default=None, type=int,
                     help='Bit to inject fault. MSB=0 and LSB=31')
+parser.add_argument('-feats', '--features', dest='fiFeats', action='store_true',
+                    help='inject FI on features/activations')
+parser.add_argument('-wts', '--weights', dest='fiWeights', action='store_true',
+                    help='inject FI on weights')
 
 parser.add_argument('-l', '--log', dest='log', action='store_true',
                     help='turn loging on')
@@ -252,6 +256,11 @@ def validate(val_loader, model, criterion, args):
     if args.injection:
         logConfig("layer", "{}".format(args.layer))
         logConfig("bit", "{}".format(args.bit))
+        logConfig("location:", "  ")
+        logConfig("\t features ", "{}".format(args.fiFeats))
+        logConfig("\t weights ", "{}".format(args.fiWeights))
+        if not(args.fiFeats ^ args.fiWeights): 
+            logConfig(" ", "Setting random mode.")
     logConfig("batch size", "{}".format(args.batch_size))
 
     batch_time = AverageMeter()
@@ -302,7 +311,7 @@ def validate(val_loader, model, criterion, args):
         end = time.time()
 
         # applying faulty injection scheme
-        fi = FI(model, mode=args.injection, layer=args.layer, bit=args.bit, log=args.log)
+        fi = FI(model, mode=args.injection, layer=args.layer, bit=args.bit, log=args.log, fiFeatures=args.fiFeats, fiWeights=args.fiWeights)
         layerName, faultyLayer = fi.createFaultyLayer()
 
         if not isinstance(faultyLayer, dict):
