@@ -57,8 +57,8 @@ class FIConv2d(nn.Conv2d):
         
                 return nn.functional.conv2d(input, weightFI, self.bias, self.stride,
                                 self.padding, self.dilation, self.groups)
-        
-        return super(FIConv2d, self).forward(input)
+        else:
+            return super(FIConv2d, self).forward(input)
 
 
 
@@ -119,5 +119,5 @@ class FILinear(nn.Linear):
                     weightFI.data[filter][feat_idx] = faulty_val
 
                 return nn.functional.linear(input, weightFI, self.bias)
-        
-        return super(FILinear, self).forward(input)
+        else:
+            return super(FILinear, self).forward(input)
