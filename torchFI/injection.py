@@ -5,17 +5,20 @@ import torchvision.models as models
 import numpy as np
 
 from finodes import *
+from quantnodes import *
 from bitflip import *
 from util.log import *
 
 
 class FI(object):
 
-    def __init__(self, model, mode=False, bit=None, log=False, layer=0, fiFeatures=True, fiWeights=True):
+    def __init__(self, model, bitsActs=8, bitsParams=8, mode=False, bit=None, log=False, layer=0, fiFeatures=True, fiWeights=True):
         self.model = model
         self.layer = layer
         self.bit = bit
         self.log = log
+        self.num_bits_acts = bitsActs
+        self.num_bits_params = bitsParams
         self.injectionMode = mode
         self.injectionFeatures = fiFeatures
         self.injectionWeights = fiWeights
@@ -28,12 +31,17 @@ class FI(object):
             faultyLayer = FIConv2d(self, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
                                 layerObj.kernel_size, layerObj.stride, layerObj.padding, layerObj.dilation,
                                 layerObj.groups, layerObj.bias)
+            # faultyLayer = QConv2d(self, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
+            #                     layerObj.kernel_size, self.num_bits_acts, self.num_bits_params, layerObj.stride, layerObj.padding, 
+            #                     layerObj.dilation, layerObj.groups, layerObj.bias)
             return layerName, faultyLayer
         
         # Linear Object
         elif isinstance(layerObj, torch.nn.modules.Linear):
             faultyLayer = FILinear(self, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, 
                                 layerObj.out_features)
+            # faultyLayer = QLinear(self, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, 
+            #                     layerObj.out_features, self.num_bits_acts, self.num_bits_params)
             return layerName, faultyLayer
         
         # Sequential Object
