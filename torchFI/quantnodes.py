@@ -1,6 +1,7 @@
-from finodes import *
-from quant_util import *
+from .finodes import *
+from .quant_util import *
 
+import torch
 import torch.nn as nn
 
 from enum import Enum
@@ -81,35 +82,31 @@ class QConv2d(FIConv2d):
             # Dynamic ranges - save in auxiliary buffer, requantize each time based on dynamic input scale factor
             self.register_buffer('base_b_q', base_b_q)
         
-    def forward(self, input):
+        self.current_in_scale = 1
+        self.current_in_zero_point = 0
+        self.current_accum_scale = 1
+    
+    def forward(self, inputs):
 
-        in_scales = []
-        in_zero_points = []
-        accum_scales = []
-
+        in_scales, in_zero_points = self.get_inputs_quantization_params(inputs)
+        
         # Quantize inputs
-        for batch in input:
-            in_scale, in_zero_point = self.get_inputs_quantization_params(batch)
+        inputs_q = []
+        
+        input_q = linear_quantize_clamp(inputs.data, in_scales, in_zero_points,
+                                        self.acts_min_q_val, self.acts_max_q_val, inplace=False)
 
-            in_scales.append(in_scale)
-            in_zero_points.append(in_zero_point)
+        inputs_q.append(torch.autograd.Variable(input_q))
 
-            linear_quantize_clamp(batch.data, in_scale, in_zero_point,
-                                    self.acts_min_q_val, self.acts_max_q_val, inplace=True)
-            
-            accum_scale = in_scale * self.w_scale
-            
-            if self.per_channel_wts:
-                accum_scale = accum_scale.squeeze(dim=-1)
+        self.current_accum_scale = self.current_in_scale * self.w_scale
+        if self.per_channel_wts:
+            self.current_accum_scale = self.current_accum_scale.squeeze(dim=-1)
 
-            accum_scales.append(accum_scale)
-
-        # TODO: Check accum_scale to work with batch approach
         if self.has_bias:
             # Re-quantize bias to match x * w scale: b_q' = (in_scale * w_scale / b_scale) * (b_q + b_zero_point)
             self.bias.data = linear_quantize_clamp(self.base_b_q + self.b_zero_point,
-                                                                accum_scale / self.b_scale, 0,
-                                                                self.accum_min_q_val, self.accum_max_q_val)
+                                                                  self.current_accum_scale / self.b_scale, 0,
+                                                                  self.accum_min_q_val, self.accum_max_q_val)
 
         # Note the main terms within the summation is:
         #   (x_q + zp_x) * (w_q + zp_w)
@@ -121,40 +118,39 @@ class QConv2d(FIConv2d):
         # dealing solely with integer values, the results are the same either way.
 
         if self.mode != LinearQuantMode.SYMMETRIC:
-            for batch, in_zero_point in zip(input, in_zero_points):
-                batch += in_zero_point
+            input_q += self.current_in_zero_point
             self.weight.data += self.w_zero_point
 
-        self.fi.injectionMode = False
-        accum = super(QConv2d, self).forward(input)
+        accum = super(QConv2d, self).forward(input_q)
 
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
 
         if self.mode != LinearQuantMode.SYMMETRIC:
             self.weight.data -= self.w_zero_point
+        
 
         # Re-quantize accumulator to quantized output range
-        for batch, accum_scale in zip(accum, accum_scales):
-            out_scale, out_zero_point = self.get_output_quantization_params(accum, accum_scale)
-            requant_scale, requant_zero_point = self.get_accum_to_output_re_quantization_params(out_scale, out_zero_point, accum_scale)
-            linear_quantize_clamp(batch.data, requant_scale, requant_zero_point,
-                                self.acts_min_q_val, self.acts_max_q_val, inplace=True)
+        out_scale, out_zero_point = self.get_output_quantization_params(accum)
+        requant_scale, requant_zero_point = self.get_accum_to_output_re_quantization_params(out_scale, out_zero_point)
+        out_q = linear_quantize_clamp(accum.data, requant_scale, requant_zero_point,
+                                      self.acts_min_q_val, self.acts_max_q_val, inplace=True)
 
-            # De-quantize back to FP32
-            linear_dequantize(batch.data, out_scale, out_zero_point, inplace=True)
+        # De-quantize back to FP32
+        out_f = linear_dequantize(out_q, out_scale, out_zero_point, inplace=True)
 
-        return torch.autograd.Variable(accum)
+        return torch.autograd.Variable(out_f)
 
     def get_inputs_quantization_params(self, input):
-        in_scale, in_zero_point = _get_tensor_quantization_params(input, self.num_bits_acts, self.mode, clip=self.clip_acts)
-        return in_scale, in_zero_point
+        self.current_in_scale, self.current_in_zero_point = _get_tensor_quantization_params(input, self.num_bits_acts,
+                                                                                            self.mode,clip=self.clip_acts)
+        return self.current_in_scale, self.current_in_zero_point
 
-    def get_output_quantization_params(self, accumulator, accum_scale):
-        y_f = accumulator / accum_scale
+    def get_output_quantization_params(self, accumulator):
+        y_f = accumulator / self.current_accum_scale
         return _get_tensor_quantization_params(y_f, self.num_bits_acts, self.mode, clip=self.clip_acts)
 
-    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point, accum_scale):
-        return output_scale / accum_scale, output_zero_point
+    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
+        return output_scale / self.current_accum_scale, output_zero_point
 
 
 class QLinear(FILinear):
@@ -200,35 +196,31 @@ class QLinear(FILinear):
             # Dynamic ranges - save in auxiliary buffer, requantize each time based on dynamic input scale factor
             self.register_buffer('base_b_q', base_b_q)
         
-    def forward(self, input):
+        self.current_in_scale = 1
+        self.current_in_zero_point = 0
+        self.current_accum_scale = 1
 
-        in_scales = []
-        in_zero_points = []
-        accum_scales = []
+    def forward(self, inputs):
 
+        in_scales, in_zero_points = self.get_inputs_quantization_params(inputs)
+        
         # Quantize inputs
-        for batch in input:
-            in_scale, in_zero_point = self.get_inputs_quantization_params(batch)
+        inputs_q = []
 
-            in_scales.append(in_scale)
-            in_zero_points.append(in_zero_point)
+        input_q = linear_quantize_clamp(inputs.data, in_scales, in_zero_points,
+                                        self.acts_min_q_val, self.acts_max_q_val, inplace=False)
 
-            linear_quantize_clamp(batch.data, in_scale, in_zero_point,
-                                    self.acts_min_q_val, self.acts_max_q_val, inplace=True)
-            
-            accum_scale = in_scale * self.w_scale
-            
-            if self.per_channel_wts:
-                accum_scale = accum_scale.squeeze(dim=-1)
+        inputs_q.append(torch.autograd.Variable(input_q))
 
-            accum_scales.append(accum_scale)
+        self.current_accum_scale = self.current_in_scale * self.w_scale
+        if self.per_channel_wts:
+            self.current_accum_scale = self.current_accum_scale.squeeze(dim=-1)
 
-        # TODO: Check accum_scale to work with batch approach
         if self.has_bias:
             # Re-quantize bias to match x * w scale: b_q' = (in_scale * w_scale / b_scale) * (b_q + b_zero_point)
             self.bias.data = linear_quantize_clamp(self.base_b_q + self.b_zero_point,
-                                                                accum_scale / self.b_scale, 0,
-                                                                self.accum_min_q_val, self.accum_max_q_val)
+                                                                  self.current_accum_scale / self.b_scale, 0,
+                                                                  self.accum_min_q_val, self.accum_max_q_val)
 
         # Note the main terms within the summation is:
         #   (x_q + zp_x) * (w_q + zp_w)
@@ -240,37 +232,36 @@ class QLinear(FILinear):
         # dealing solely with integer values, the results are the same either way.
 
         if self.mode != LinearQuantMode.SYMMETRIC:
-            for batch, in_zero_point in zip(input, in_zero_points):
-                batch += in_zero_point
+            input_q += self.current_in_zero_point
             self.weight.data += self.w_zero_point
 
-        self.fi.injectionMode = False
-        accum = super(QLinear, self).forward(input)
+        accum = super(QLinear, self).forward(input_q)
 
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
 
         if self.mode != LinearQuantMode.SYMMETRIC:
             self.weight.data -= self.w_zero_point
+        
 
         # Re-quantize accumulator to quantized output range
-        for batch, accum_scale in zip(accum, accum_scales):
-            out_scale, out_zero_point = self.get_output_quantization_params(accum, accum_scale)
-            requant_scale, requant_zero_point = self.get_accum_to_output_re_quantization_params(out_scale, out_zero_point, accum_scale)
-            linear_quantize_clamp(batch.data, requant_scale, requant_zero_point,
-                                self.acts_min_q_val, self.acts_max_q_val, inplace=True)
+        out_scale, out_zero_point = self.get_output_quantization_params(accum)
+        requant_scale, requant_zero_point = self.get_accum_to_output_re_quantization_params(out_scale, out_zero_point)
+        out_q = linear_quantize_clamp(accum.data, requant_scale, requant_zero_point,
+                                      self.acts_min_q_val, self.acts_max_q_val, inplace=True)
 
-            # De-quantize back to FP32
-            linear_dequantize(batch.data, out_scale, out_zero_point, inplace=True)
+        # De-quantize back to FP32
+        out_f = linear_dequantize(out_q, out_scale, out_zero_point, inplace=True)
 
-        return torch.autograd.Variable(accum)
+        return torch.autograd.Variable(out_f)
 
     def get_inputs_quantization_params(self, input):
-        in_scale, in_zero_point = _get_tensor_quantization_params(input, self.num_bits_acts, self.mode, clip=self.clip_acts)
-        return in_scale, in_zero_point
+        self.current_in_scale, self.current_in_zero_point = _get_tensor_quantization_params(input, self.num_bits_acts,
+                                                                                            self.mode,clip=self.clip_acts)
+        return self.current_in_scale, self.current_in_zero_point
 
-    def get_output_quantization_params(self, accumulator, accum_scale):
-        y_f = accumulator / accum_scale
+    def get_output_quantization_params(self, accumulator):
+        y_f = accumulator / self.current_accum_scale
         return _get_tensor_quantization_params(y_f, self.num_bits_acts, self.mode, clip=self.clip_acts)
 
-    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point, accum_scale):
-        return output_scale / accum_scale, output_zero_point
+    def get_accum_to_output_re_quantization_params(self, output_scale, output_zero_point):
+        return output_scale / self.current_accum_scale, output_zero_point
