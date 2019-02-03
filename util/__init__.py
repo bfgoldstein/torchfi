@@ -1,2 +1,2 @@
-from log import *
-from format_display import *
+from .log import *
+from .format_display import *

@@ -4,87 +4,73 @@ import torchvision.models as models
 
 import numpy as np
 
-from finodes import *
-from quantnodes import *
-from bitflip import *
+from .finodes import *
+from .quantnodes import *
+from .bitflip import *
 from util.log import *
+from util import *
 
 
 class FI(object):
 
-    def __init__(self, model, bitsActs=8, bitsParams=8, mode=False, bit=None, log=False, layer=0, fiFeatures=True, fiWeights=True):
+    def __init__(self, model, fiMode=False, fiBit=None, fiLayer=0, fiFeatures=True, fiWeights=True, 
+                quantMode=False, quantType=LinearQuantMode.SYMMETRIC, quantBitFeats=8, quantBitWts=8, 
+                quantBitAccum=32, quantClip=False, quantChannel=False, log=False):
         self.model = model
-        self.layer = layer
-        self.bit = bit
         self.log = log
-        self.num_bits_acts = bitsActs
-        self.num_bits_params = bitsParams
-        self.injectionMode = mode
+
+        self.quantizationMode = quantMode
+        self.quantizationType = LinearQuantMode[quantType]
+        self.quantizationBitWeights = quantBitWts
+        self.quantizationBitParams = quantBitFeats
+        self.quantizationBitAccum = quantBitAccum
+        self.quantizationClip = quantClip
+        self.quantizationChannel = quantChannel
+        
+        self.injectionMode = fiMode
+        self.injectionLayer = fiLayer
+        self.injectionBit = fiBit
         self.injectionFeatures = fiFeatures
         self.injectionWeights = fiWeights
+        self.numNewLayers = -1
 
-    def createFaultyLayer(self):
-        layerName, layerObj = self.model._modules.items()[self.layer]
-
-        # Conv2d Object
-        if isinstance(layerObj, torch.nn.modules.conv.Conv2d):
-            faultyLayer = FIConv2d(self, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
-                                layerObj.kernel_size, layerObj.stride, layerObj.padding, layerObj.dilation,
-                                layerObj.groups, layerObj.bias)
-            # faultyLayer = QConv2d(self, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
-            #                     layerObj.kernel_size, self.num_bits_acts, self.num_bits_params, layerObj.stride, layerObj.padding, 
-            #                     layerObj.dilation, layerObj.groups, layerObj.bias)
-            return layerName, faultyLayer
-        
-        # Linear Object
-        elif isinstance(layerObj, torch.nn.modules.Linear):
-            faultyLayer = FILinear(self, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, 
-                                layerObj.out_features)
-            # faultyLayer = QLinear(self, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, 
-            #                     layerObj.out_features, self.num_bits_acts, self.num_bits_params)
-            return layerName, faultyLayer
-        
-        # Sequential Object
-        elif isinstance(layerObj, torch.nn.modules.Sequential):
-            blocks = {}
-
-            # Bottleneck Object
-            randIdxBlockFault = np.random.randint(0, len(layerObj))
-            blockObj = layerObj[randIdxBlockFault]
+    def traverseModel(self, model):
+        for layerName, layerObj in model.named_children():
+            newLayer = self.replaceLayer(layerObj, type(layerObj), layerName)
+            setattr(model, layerName, newLayer)
             
-            blocks[randIdxBlockFault] = []
+            if self.has_children(layerObj):
+                # For block layers we call recursively
+                self.traverseModel(layerObj)
 
-            # Layers inside Bottleneck
-            randIdxBlockLayerFault = np.random.randint(0, len(blockObj._modules.items()))
-            blockLayerName, blockLayerObj = blockObj._modules.items()[randIdxBlockLayerFault]
+    def replaceLayer(self, layerObj, layerType, layerName):
+        if self.quantizationMode:    
+            if layerType == nn.Conv2d:
+                self.numNewLayers += 1
+                return QConv2d(self, self.numNewLayers, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
+                            layerObj.kernel_size, layerObj.stride, layerObj.padding, layerObj.dilation, layerObj.groups, layerObj.bias, 
+                            self.quantizationBitWeights, self.quantizationBitParams, self.quantizationBitAccum, self.quantizationType,
+                            self.quantizationClip, self.quantizationChannel)
+            elif layerType == nn.Linear:
+                self.numNewLayers += 1
+                return QLinear(self, self.numNewLayers, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, layerObj.out_features, 
+                            self.quantizationBitWeights, self.quantizationBitParams, self.quantizationBitAccum, self.quantizationType,
+                            self.quantizationClip, self.quantizationChannel)
+            else:
+                return layerObj
 
-            while not (isinstance(blockLayerObj, torch.nn.modules.conv.Conv2d) or (blockLayerName == "downsample" and isinstance(blockLayerObj, torch.nn.modules.Sequential))):
-                randIdxBlockLayerFault = np.random.randint(0, len(blockObj._modules.items()))
-                blockLayerName, blockLayerObj = blockObj._modules.items()[randIdxBlockLayerFault]
-
-            if isinstance(blockLayerObj, torch.nn.modules.conv.Conv2d):
-                faultyLayer = FIConv2d(self, layerName + "_Bottleneck_" + str(randIdxBlockFault) + "_" + blockLayerName, blockLayerObj.weight, blockLayerObj.in_channels, 
-                                    blockLayerObj.out_channels, blockLayerObj.kernel_size, blockLayerObj.stride, blockLayerObj.padding, 
-                                    blockLayerObj.dilation, blockLayerObj.groups, blockLayerObj.bias)
-                blocks[randIdxBlockFault].append((blockLayerName, faultyLayer))
-
-            # Downsample Sequential Object
-            if blockLayerName == "downsample" and isinstance(blockLayerObj, torch.nn.modules.Sequential):
-                downsampleLayers = []
-                for downsampleName, downsampleObj in blockLayerObj._modules.items():
-                    if isinstance(downsampleObj, torch.nn.modules.conv.Conv2d):
-                        faultyLayer = FIConv2d(self, layerName + "_Bottleneck_" + str(randIdxBlockFault) + "_" + blockLayerName + "_" + downsampleName, downsampleObj.weight, 
-                                            downsampleObj.in_channels, downsampleObj.out_channels, downsampleObj.kernel_size, downsampleObj.stride,
-                                            downsampleObj.padding, downsampleObj.dilation, downsampleObj.groups, downsampleObj.bias)
-                        downsampleLayers.append((downsampleName, faultyLayer))
-                blocks[randIdxBlockFault].append((blockLayerName, downsampleLayers))
-            
-            return layerName, blocks
+        elif self.injectionMode:
+            if layerType == nn.Conv2d:
+                self.numNewLayers += 1
+                return FIConv2d(self, self.numNewLayers, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
+                            layerObj.kernel_size, layerObj.stride, layerObj.padding, layerObj.dilation, layerObj.groups, layerObj.bias)
+            elif layerType == nn.Linear:
+                self.numNewLayers += 1
+                return FILinear(self, self.numNewLayers, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, layerObj.out_features)
+            else:
+                return layerObj
         else:
-             raise Exception('Not Implemented Faulty Node')
-             
-        
-
+            return layerObj
 
     def injectFeatures(self, tensorData, tensorShape):
         faulty_res = []
@@ -96,7 +82,9 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [fault_idx])
 
-            fault_val = flipFloat(tensorData[fault_idx], bit=self.bit, log=self.log)
+            # fault_val = flipFloat(tensorData[fault_idx], bit=self.injectionBit, log=self.log)
+            fault_val = bitFlip(tensorData[fault_idx], size=self.quantizationBitParams, 
+                        bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
             faulty_res.append((fault_idx, fault_val))
 
@@ -105,15 +93,17 @@ class FI(object):
         elif len(tensorShape) == 3:
             batches_size, channels_size, feat_size = tensorShape
 
-            for batch_idx in xrange(0, batches_size):
+            for batch_idx in range(0, batches_size):
                 channel_idx = np.random.randint(0, channels_size)
                 feat_idx = np.random.randint(0, feat_size)
 
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, channel_idx, feat_idx])
 
-                faulty_val = flipFloat(tensorData[batch_idx][channel_idx][feat_idx], bit=self.bit, 
-                            log=self.log) 
+                # faulty_val = flipFloat(tensorData[batch_idx][channel_idx][feat_idx], bit=self.injectionBit, 
+                #             log=self.log) 
+                faulty_val = bitFlip(tensorData[batch_idx][channel_idx][feat_idx], size=self.quantizationBitParams, 
+                            bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
         
                 faulty_res.append((channel_idx, feat_idx, faulty_val))
 
@@ -122,7 +112,7 @@ class FI(object):
         if len(tensorShape) == 4:
             batches_size, channels_size, feat_row_size, feat_col_size = tensorShape
 
-            for batch_idx in xrange(0, batches_size):
+            for batch_idx in range(0, batches_size):
                 channel_idx = np.random.randint(0, channels_size)
                 feat_row_idx = np.random.randint(0, feat_row_size)
                 feat_col_idx = np.random.randint(0, feat_col_size)
@@ -130,7 +120,9 @@ class FI(object):
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, channel_idx, feat_row_idx, feat_col_idx])
                 
-                faulty_val = flipFloat(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], bit=self.bit, log=self.log) 
+                # faulty_val = flipFloat(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], bit=self.injectionBit, log=self.log) 
+                faulty_val = bitFlip(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], size=self.quantizationBitParams, 
+                            bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
 
                 faulty_res.append((channel_idx, feat_row_idx, feat_col_idx, faulty_val))
             
@@ -139,13 +131,15 @@ class FI(object):
         else:
             batches_size, feat_size = tensorShape
 
-            for batch_idx in xrange(0, batches_size):
+            for batch_idx in range(0, batches_size):
                 feat_idx = np.random.randint(0, feat_size)
 
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, feat_idx])
  
-                faulty_val = flipFloat(tensorData[batch_idx][feat_idx], bit=self.bit, log=self.log)
+                # faulty_val = flipFloat(tensorData[batch_idx][feat_idx], bit=self.injectionBit, log=self.log)
+                faulty_val = bitFlip(tensorData[batch_idx][feat_idx], size=self.quantizationBitParams, 
+                            bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
                 faulty_res.append((feat_idx, faulty_val))
 
@@ -162,7 +156,8 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [fault_idx])
 
-            fault_val = flipFloat(tensorData[fault_idx], bit=self.bit, log=self.log)
+            # fault_val = flipFloat(tensorData[fault_idx], bit=self.injectionBit, log=self.log)
+            fault_val = bitFlip(tensorData[fault_idx], size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
             faulty_res.append((fault_idx, fault_val))
 
@@ -178,8 +173,11 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, channel_idx, feat_idx])
 
-            faulty_val = flipFloat(tensorData[filter_idx][channel_idx][feat_idx], bit=self.bit, 
-                        log=self.log) 
+            # faulty_val = flipFloat(tensorData[filter_idx][channel_idx][feat_idx], bit=self.injectionBit, 
+            #             log=self.log) 
+            faulty_val = bitFlip(tensorData[filter_idx][channel_idx][feat_idx], size=self.quantizationBitWeights, bit=self.injectionBit, 
+                        log=self.log, quantized=self.quantizationMode) 
+            
 
             return (filter_idx, channel_idx, feat_idx, faulty_val)
 
@@ -194,8 +192,10 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, channel_idx, feat_row_idx, feat_col_idx])
 
-            faulty_val = flipFloat(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
-                        bit=self.bit, log=self.log) 
+            # faulty_val = flipFloat(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
+            #             bit=self.injectionBit, log=self.log) 
+            faulty_val = bitFlip(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
+                        size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
          
             return (filter_idx, channel_idx, feat_row_idx, feat_col_idx, faulty_val)
 
@@ -208,21 +208,27 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, feat_idx])
 
-            faulty_val = flipFloat(tensorData[filter_idx][feat_idx], bit=self.bit, log=self.log)
+            # faulty_val = flipFloat(tensorData[filter_idx][feat_idx], bit=self.injectionBit, log=self.log)
+            faulty_val = bitFlip(tensorData[filter_idx][feat_idx], size=self.quantizationBitWeights, 
+                        bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
             return (filter_idx, feat_idx, faulty_val)
-
 
     def setInjectionMode(self, mode):
         if self.log:
             logInjectionWarning("\tSetting injection mode to " + str(mode))
         self.injectionMode = mode
 
-
     def setInjectionBit(self, bit):
         if type(bit) == int and bit >= 0 and bit < 32:
-            self.bit = bit
-
+            self.injectionBit = bit
 
     def setInjectionLayer(self, layer):
-        self.layer = layer
+        self.injectionLayer = layer
+
+    def has_children(self, module):
+        try:
+            next(module.children())
+            return True
+        except StopIteration:
+            return False

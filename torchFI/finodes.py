@@ -7,17 +7,18 @@ from util.log import *
 
 class FIConv2d(nn.Conv2d):
    
-    def __init__(self, fi, name, weight, in_channels, out_channels, kernel_size, stride=1, padding=0, 
+    def __init__(self, fi, id, name, weight, in_channels, out_channels, kernel_size, stride=1, padding=0, 
                 dilation=1, groups=1, bias=True):
         super(FIConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, 
             groups, bias)
         
         self.fi = fi
+        self.id = id
         self.name = name
         self.weight = weight
 
     def forward(self, input):
-        if self.fi.injectionMode:
+        if self.fi.injectionMode and self.id == self.fi.injectionLayer:
             # XNOR Operation
             # True only if both injectionFeatures and injectionWeights are True or False
             # False if one of them is True 
@@ -64,16 +65,17 @@ class FIConv2d(nn.Conv2d):
 
 class FILinear(nn.Linear):
 
-    def __init__(self, fi, name, weight, bias, in_features, out_features, b=True):
+    def __init__(self, fi, id, name, weight, bias, in_features, out_features, b=True):
         super(FILinear, self).__init__(in_features, out_features, b)
 
         self.fi = fi
+        self.id = id
         self.name = name
         self.weight = weight
         self.bias = bias
 
     def forward(self, input):
-        if self.fi.injectionMode:
+        if self.fi.injectionMode and self.id == self.fi.injectionLayer:
             # XNOR Operation
             # True only if both injectionFeatures and injectionWeights are True or False
             # False if one of them is True 

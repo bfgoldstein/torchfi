@@ -39,11 +39,12 @@ def _get_tensor_quantization_params(tensor, num_bits, mode, clip=False, per_chan
 
 class QConv2d(FIConv2d):
     
-    def __init__(self, fi, name, weight, in_channels, out_channels, kernel_size, num_bits_acts, num_bits_params, 
-                stride=1, padding=0, dilation=1, groups=1, bias=True, num_bits_accum=32, 
-                mode=LinearQuantMode.SYMMETRIC, clip_acts=False, per_channel_wts=True):
+    def __init__(self, fi, id, name, weight, in_channels, out_channels, kernel_size, 
+                stride=1, padding=0, dilation=1, groups=1, bias=True,
+                num_bits_acts=8, num_bits_params=8, num_bits_accum=32, mode=LinearQuantMode.SYMMETRIC, 
+                clip_acts=False, per_channel_wts=False):
 
-        super(QConv2d, self).__init__(fi, name, weight, in_channels, out_channels, kernel_size, 
+        super(QConv2d, self).__init__(fi, id, name, weight, in_channels, out_channels, kernel_size, 
                 stride, padding, dilation, groups, bias)
         
         self.num_bits_acts = num_bits_acts
@@ -154,11 +155,12 @@ class QConv2d(FIConv2d):
 
 
 class QLinear(FILinear):
-    
-    def __init__(self, fi, name, weight, bias, in_features, out_features, num_bits_acts, num_bits_params, 
-                b=True, num_bits_accum=32, mode=LinearQuantMode.SYMMETRIC, clip_acts=False, per_channel_wts=True):
+        
+    def __init__(self, fi, id, name, weight, bias, in_features, out_features,
+                num_bits_acts=8, num_bits_params=8, num_bits_accum=32, mode=LinearQuantMode.SYMMETRIC, 
+                clip_acts=False, per_channel_wts=False, b=True):
 
-        super(QLinear, self).__init__(fi, name, weight, bias, in_features, out_features, b)
+        super(QLinear, self).__init__(fi, id, name, weight, bias, in_features, out_features, b)
         
         self.num_bits_acts = num_bits_acts
         self.num_bits_accum = num_bits_accum

@@ -24,6 +24,13 @@ import torchFI as tfi
 from torchFI.injection import FI
 from util.log import *
 
+# import ptvsd
+
+# # Allow other computers to attach to ptvsd at this IP address and port.
+# ptvsd.enable_attach(address=('10.190.0.160', 8097), redirect_output=True)
+
+# # Pause the program until a remote debugger is attached
+# ptvsd.wait_for_attach()
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
@@ -72,6 +79,9 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'multi node data parallel training')
 
 
+#####
+##  Fault Injection Flags
+#####
 parser.add_argument('-i', '--injection', dest='injection', action='store_true',
                     help='apply FI model')
 parser.add_argument('--layer', default=0, type=int,
@@ -83,9 +93,6 @@ parser.add_argument('-feats', '--features', dest='fiFeats', action='store_true',
 parser.add_argument('-wts', '--weights', dest='fiWeights', action='store_true',
                     help='inject FI on weights')
 
-parser.add_argument('-l', '--log', dest='log', action='store_true',
-                    help='turn loging on')
-
 parser.add_argument('--scores', dest='scores', action='store_true',
                     help='turn scores loging on')
 parser.add_argument('--suffix-scores', dest='fidScores', default='scores', type=str,
@@ -95,6 +102,32 @@ parser.add_argument('--deltas', dest='deltas', action='store_true',
                     help='turn deltas loging on')
 parser.add_argument('--suffix-deltas', dest='fidDeltas', default='deltas', type=str,
                     help='suffix of deltas filename (prefix _full.txt, _correct.txt and _miss.txt)')
+
+#####
+##  Quantization Flags
+#####
+parser.add_argument('--quantize', dest='quantize', action='store_true',
+                    help='apply quantization to model')
+parser.add_argument('--quant-type', dest='quant_type', default='SYMMETRIC', type=str,
+                    help='Type of quantization: "sym", "asym_u", "asym_s"')
+parser.add_argument('--quant-feats', dest='quant_bfeats', default=8, type=int,
+                    help='# of bits to quantize features')
+parser.add_argument('--quant-wts', dest='quant_bwts', default=8, type=int,
+                    help='# of bits to quantize weights')
+parser.add_argument('--quant-accum', dest='quant_baccum', default=32, type=int,
+                    help='# of bits of accumulator used during quantization')
+parser.add_argument('--quant-clip', dest='quant_clip', action='store_true',
+                    help='enable clipping of features during quantization')
+parser.add_argument('--quant-channel', dest='quant_channel', action='store_true',
+                    help='enable per-channel quantization of weights')
+
+#####
+##  Pruning Flags
+#####
+
+
+parser.add_argument('-l', '--log', dest='log', action='store_true',
+                    help='turn loging on')
 
 
 def main():
@@ -252,6 +285,14 @@ def main_cpu_worker(args):
 def validate(val_loader, model, criterion, args):
     # loging configs to screen
     logConfig("model", "{}".format(args.arch))
+    logConfig("quantization", "{}".format(args.quantize))
+    if args.quantize:
+        logConfig("mode", "{}".format(args.quant_type))
+        logConfig("# bits features", "{}".format(args.quant_bfeats))
+        logConfig("# bits weights", "{}".format(args.quant_bwts))
+        logConfig("# bits accumulator", "{}".format(args.quant_baccum))
+        logConfig("clip", "{}".format(args.quant_clip))
+        logConfig("per-channel", "{}".format(args.quant_channel))
     logConfig("injection", "{}".format(args.injection))
     if args.injection:
         logConfig("layer", "{}".format(args.layer))
@@ -271,7 +312,17 @@ def validate(val_loader, model, criterion, args):
     # switch to evaluate mode
     model.eval()
 
+    # applying faulty injection scheme
+    fi = FI(model, fiMode=args.injection, fiLayer=args.layer, fiBit=args.bit, fiFeatures=args.fiFeats, fiWeights=args.fiWeights,
+            quantMode=args.quantize, quantType=args.quant_type, quantBitFeats=args.quant_bfeats, quantBitWts=args.quant_bwts, quantBitAccum=args.quant_baccum,
+            quantClip=args.quant_clip, quantChannel=args.quant_channel, log=args.log)
+
+    fi.traverseModel(model)
+    print(model._modules.items())
+
     # Golden Run
+    fi.injectionMode = False
+    
     with torch.no_grad():
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
@@ -301,31 +352,17 @@ def validate(val_loader, model, criterion, args):
                       'Acc@1 {top1_golden.val:.3f} ({top1_golden.avg:.3f})\t'
                       'Acc@5 {top5_golden.val:.3f} ({top5_golden.avg:.3f})'.format(
                        i, len(val_loader), batch_time=batch_time, top1_golden=top1_golden, top5_golden=top5_golden))
-            
+            # break
+
     batch_time.reset()
     top1_faulty = AverageMeter()
     top5_faulty = AverageMeter()
 
     # Faulty Run
+    fi.injectionMode = True
+
     with torch.no_grad():
         end = time.time()
-
-        # applying faulty injection scheme
-        fi = FI(model, mode=args.injection, layer=args.layer, bit=args.bit, log=args.log, fiFeatures=args.fiFeats, fiWeights=args.fiWeights)
-        layerName, faultyLayer = fi.createFaultyLayer()
-
-        if not isinstance(faultyLayer, dict):
-            model._modules[layerName] = faultyLayer
-        else:
-            for blockIdx in faultyLayer.keys():
-                # Iterate over Blottleneck objects
-                for blockLayerName, fLayer in faultyLayer[blockIdx]:
-                    # Switch original layers with faulty layers
-                    if blockLayerName == "downsample":
-                        for downsampleIdx, downsampleLayer in fLayer:
-                            model._modules[layerName][blockIdx]._modules[blockLayerName]._modules[downsampleIdx] = downsampleLayer
-                    else:
-                        model._modules[layerName][blockIdx]._modules[blockLayerName] = fLayer
 
         for i, (input, target) in enumerate(val_loader):
             if args.gpu is not None:
@@ -360,7 +397,7 @@ def validate(val_loader, model, criterion, args):
                       'Acc@1 {top1_faulty.val:.3f} ({top1_faulty.avg:.3f})\t'
                       'Acc@5 {top5_faulty.val:.3f} ({top5_faulty.avg:.3f})'.format(
                        i, len(val_loader), batch_time=batch_time, top1_faulty=top1_faulty, top5_faulty=top5_faulty))
-            
+            # break
         print('Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
               .format(top1_golden=top1_golden, top5_golden=top5_golden))
 
@@ -446,8 +483,8 @@ class SDCMeter(object):
                     tSize = scoreTensor.size()
                     row = tSize[0]
                     cols = tSize[1]
-                    for x in xrange(0, row):
-                        for y in xrange(0, cols):
+                    for x in range(0, row):
+                        for y in range(0, cols):
                             fscore.write("%2.4f " % scoreTensor[x][y])
                         fscore.write("\n")
         cwd = os.getcwd()

@@ -13,20 +13,30 @@ def flipFloat(val, bit=None, log=False):
         bit = np.random.randint(0, faultValue.len)
     faultValue.invert(bit)
 
-    # TODO: apply log functions
     if log:
         logInjectionBit("\tFlipping bit ", bit)
         logInjectionVal("\tOriginal: ", float(val), " Corrupted: ", faultValue.float)
 
     return faultValue.float
 
+def flipInt(val, size, bit=None, log=False):
+    # Cast integer to BitArray and flip (invert) random bit 0-N
+    val = int(val)
 
-def bitFlip(value):
-    vType = value.dtype
+    faultValue = BitArray(int=val, length=size)
+    if bit == None:
+        bit = np.random.randint(0, faultValue.len)
+    faultValue.invert(bit)
 
-    if vType == "Float":
-        return flipFloat(value)
+    if log:
+        logInjectionBit("\tFlipping bit ", bit)
+        logInjectionVal("\tOriginal: ", int(val), " Corrupted: ", faultValue.int)
+
+    return faultValue.int
+
+
+def bitFlip(value, size=8, bit=None, log=False, quantized=False):
+    if quantized:
+        return flipInt(value, size, bit, log)
     else:
-        # TODO: apply log functions
-        print("\t bitFlipt for " + str(vType) + " was not implemented \n")
-        sys.exit()
+        return flipFloat(value, bit, log)

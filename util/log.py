@@ -1,4 +1,4 @@
-from format_display import *
+from .format_display import *
 
 logMsg = "Log ===>"
 
