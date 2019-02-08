@@ -480,16 +480,13 @@ class SDCMeter(object):
         def writeFID(fidScore, scores):
             with open(fidScore, 'w') as fscore:
                 for scoreTensor in scores:
-                    tSize = scoreTensor.size()
-                    row = tSize[0]
-                    cols = tSize[1]
-                    for x in range(0, row):
-                        for y in range(0, cols):
-                            fscore.write("%2.4f " % scoreTensor[x][y])
+                    for row in scoreTensor:
+                        for val in row:
+                            fscore.write("%2.4f " % val)
                         fscore.write("\n")
         cwd = os.getcwd()
-        fidGolden = cwd + '/' + fidSuffixName + '_golden.txt'
-        fidFaulty = cwd + '/' + fidSuffixName + '_faulty.txt'
+        fidGolden = cwd + '/' + fidSuffixName + '_score_golden.txt'
+        fidFaulty = cwd + '/' + fidSuffixName + '_score_faulty.txt'
         writeFID(fidGolden, self.goldenScores)
         writeFID(fidFaulty, self.faultyScores)
 
@@ -501,9 +498,9 @@ class SDCMeter(object):
                         fid.write("%2.4f " % val)
 
         cwd = os.getcwd()
-        fidFull = cwd + '/' + fidDeltas + "_full.txt"
-        fidMiss = cwd + '/' + fidDeltas + "_miss.txt"
-        fidCorrect = cwd + '/' + fidDeltas + "_correct.txt"
+        fidFull = cwd + '/' + fidDeltas + "_delta_full.txt"
+        fidMiss = cwd + '/' + fidDeltas + "_delta_miss.txt"
+        fidCorrect = cwd + '/' + fidDeltas + "_delta_correct.txt"
        
         writeFID(fidFull, self.deltas)
         writeFID(fidMiss, self.delta_miss)
