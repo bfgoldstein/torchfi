@@ -423,6 +423,7 @@ def validate(val_loader, model, criterion, args):
         if args.deltas:
             sdcs.writeDeltas(args.fidPrefix)
 
+        writeOutData(args.fidPrefix, [top1_golden.avg, top5_golden.avg], [top1_faulty.avg, top5_faulty.avg], [sdcs.top1SDC, sdcs.top5SDC])
 
     return
 
@@ -604,6 +605,11 @@ def calculateDeltas(goldenPred, goldenScores, faultyOutput):
 
         return deltas, delta_miss, delta_correct
 
+def writeOutData(fidPrefixName, accGolden, accFaulty, sdcs):
+    cwd = os.getcwd()
+    fid = cwd + '/' + fidPrefixName + '_out.npz'
+    np.savez_compressed(fid, accGolden=np.array(accGolden, dtype=np.float32), accFaulty=np.array(accFaulty, 
+                        dtype=np.float32), sdcs=np.array(sdcs, dtype=np.float32))
 
 
 if __name__ == '__main__':
