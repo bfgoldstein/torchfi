@@ -97,13 +97,11 @@ parser.add_argument('-wts', '--weights', dest='fiWeights', action='store_true',
 
 parser.add_argument('--scores', dest='scores', action='store_true',
                     help='turn scores loging on')
-parser.add_argument('--suffix-scores', dest='fidScores', default='scores', type=str,
-                    help='suffix of scores filename (prefix _golden.txt and _faulty.txt)')
-
 parser.add_argument('--deltas', dest='deltas', action='store_true',
                     help='turn deltas loging on')
-parser.add_argument('--suffix-deltas', dest='fidDeltas', default='deltas', type=str,
-                    help='suffix of deltas filename (prefix _full.txt, _correct.txt and _miss.txt)')
+
+parser.add_argument('--prefix-output', dest='fidPrefix', default='out', type=str,
+                    help='prefix of output filenames')
 
 #####
 ##  Quantization Flags
@@ -419,11 +417,11 @@ def validate(val_loader, model, criterion, args):
               .format(sdc=sdcs))
 
         if args.scores:
-            sdcs.writeScores(args.fidScores)
-            sdcs.writeScoresNPZData(args.fidScores)
+            sdcs.writeScores(args.fidPrefix)
+            sdcs.writeScoresNPZData(args.fidPrefix)
 
         if args.deltas:
-            sdcs.writeDeltas(args.fidDeltas)
+            sdcs.writeDeltas(args.fidPrefix)
 
 
     return
@@ -491,7 +489,7 @@ class SDCMeter(object):
         self.top1SDC *= 100
         self.top5SDC *= 100
 
-    def writeScores(self, fidSuffixName):
+    def writeScores(self, fidPrefixName):
         def writeFID(fidScore, scores):
             with open(fidScore, 'w') as fscore:
                 for scoreTensor in scores:
@@ -500,12 +498,12 @@ class SDCMeter(object):
                             fscore.write("%2.4f " % val)
                         fscore.write("\n")
         cwd = os.getcwd()
-        fidGolden = cwd + '/' + fidSuffixName + '_score_golden.txt'
-        fidFaulty = cwd + '/' + fidSuffixName + '_score_faulty.txt'
+        fidGolden = cwd + '/' + fidPrefixName + '_score_golden.txt'
+        fidFaulty = cwd + '/' + fidPrefixName + '_score_faulty.txt'
         writeFID(fidGolden, self.goldenScores)
         writeFID(fidFaulty, self.faultyScores)
 
-    def writeDeltas(self, fidDeltas):
+    def writeDeltas(self, fidPrefixName):
         def writeFID(fidPath, deltaList):
             with open(fidPath, 'w') as fid:
                 for batchList in deltaList:
@@ -513,20 +511,20 @@ class SDCMeter(object):
                         fid.write("%2.4f " % val)
 
         cwd = os.getcwd()
-        fidFull = cwd + '/' + fidDeltas + "_delta_full.txt"
-        fidMiss = cwd + '/' + fidDeltas + "_delta_miss.txt"
-        fidCorrect = cwd + '/' + fidDeltas + "_delta_correct.txt"
+        fidFull = cwd + '/' + fidPrefixName + "_delta_full.txt"
+        fidMiss = cwd + '/' + fidPrefixName + "_delta_miss.txt"
+        fidCorrect = cwd + '/' + fidPrefixName + "_delta_correct.txt"
        
         writeFID(fidFull, self.deltas)
         writeFID(fidMiss, self.delta_miss)
         writeFID(fidCorrect, self.delta_correct)
 
-    def writeScoresNPZData(self, fidSuffixName):
+    def writeScoresNPZData(self, fidPrefixName):
         def writeFID(fidScore, scores):
             np.savez_compressed(fidScore, *np.vstack(scores))
         cwd = os.getcwd()
-        fidGolden = cwd + '/' + fidSuffixName + '_score_golden.npz'
-        fidFaulty = cwd + '/' + fidSuffixName + '_score_faulty.npz'
+        fidGolden = cwd + '/' + fidPrefixName + '_score_golden.npz'
+        fidFaulty = cwd + '/' + fidPrefixName + '_score_faulty.npz'
         writeFID(fidGolden, self.goldenScoresAll)
         writeFID(fidFaulty, self.faultyScoresAll)
 
