@@ -6,6 +6,8 @@ import time
 import warnings
 import sys
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -338,6 +340,8 @@ def validate(val_loader, model, criterion, args):
             top1_golden.update(acc1[0], input.size(0))
             top5_golden.update(acc5[0], input.size(0))
 
+            sdcs.updateGoldenData(output)
+
             scores, predictions = topN(output, target, topk=(1,5))
             sdcs.updateGoldenBatchPred(predictions)
             sdcs.updateGoldenBatchScore(scores)
@@ -377,6 +381,8 @@ def validate(val_loader, model, criterion, args):
             top1_faulty.update(acc1[0], input.size(0))
             top5_faulty.update(acc5[0], input.size(0))
 
+            sdcs.updateFaultyData(output)
+
             scores, predictions = topN(output, target, topk=(1,5))
             sdcs.updateFaultyBatchPred(predictions)
             sdcs.updateFaultyBatchScore(scores)
@@ -414,6 +420,7 @@ def validate(val_loader, model, criterion, args):
 
         if args.scores:
             sdcs.writeScores(args.fidScores)
+            sdcs.writeScoresNPZData(args.fidScores)
 
         if args.deltas:
             sdcs.writeDeltas(args.fidDeltas)
@@ -449,6 +456,14 @@ class SDCMeter(object):
         self.acc1 = acc1
         self.acc5 = acc5
 
+    def updateGoldenData(self, scoreTensors):
+        for scores in scoreTensors.cpu().numpy():
+            self.goldenScoresAll.append(scores)
+
+    def updateFaultyData(self, scoreTensors):
+        for scores in scoreTensors.cpu().numpy():
+            self.faultyScoresAll.append(scores)
+    
     def updateGoldenBatchPred(self, predTensors):
         self.goldenPred.append(predTensors)
 
@@ -506,6 +521,14 @@ class SDCMeter(object):
         writeFID(fidMiss, self.delta_miss)
         writeFID(fidCorrect, self.delta_correct)
 
+    def writeScoresNPZData(self, fidSuffixName):
+        def writeFID(fidScore, scores):
+            np.savez_compressed(fidScore, *np.vstack(scores))
+        cwd = os.getcwd()
+        fidGolden = cwd + '/' + fidSuffixName + '_score_golden.npz'
+        fidFaulty = cwd + '/' + fidSuffixName + '_score_faulty.npz'
+        writeFID(fidGolden, self.goldenScoresAll)
+        writeFID(fidFaulty, self.faultyScoresAll)
 
     def reset(self):
         self.acc1 = 0
@@ -516,6 +539,8 @@ class SDCMeter(object):
         self.faultyPred = []
         self.goldenScores = []
         self.faultyScores = []
+        self.goldenScoresAll = []
+        self.faultyScoresAll = []
         self.deltas = []
         self.delta_miss = []
         self.delta_correct = []
