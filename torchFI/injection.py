@@ -82,7 +82,6 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [fault_idx])
 
-            # fault_val = flipFloat(tensorData[fault_idx], bit=self.injectionBit, log=self.log)
             fault_val = bitFlip(tensorData[fault_idx], size=self.quantizationBitParams, 
                         bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
@@ -100,8 +99,6 @@ class FI(object):
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, channel_idx, feat_idx])
 
-                # faulty_val = flipFloat(tensorData[batch_idx][channel_idx][feat_idx], bit=self.injectionBit, 
-                #             log=self.log) 
                 faulty_val = bitFlip(tensorData[batch_idx][channel_idx][feat_idx], size=self.quantizationBitParams, 
                             bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
         
@@ -120,7 +117,6 @@ class FI(object):
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, channel_idx, feat_row_idx, feat_col_idx])
                 
-                # faulty_val = flipFloat(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], bit=self.injectionBit, log=self.log) 
                 faulty_val = bitFlip(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], size=self.quantizationBitParams, 
                             bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
 
@@ -137,7 +133,6 @@ class FI(object):
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, feat_idx])
  
-                # faulty_val = flipFloat(tensorData[batch_idx][feat_idx], bit=self.injectionBit, log=self.log)
                 faulty_val = bitFlip(tensorData[batch_idx][feat_idx], size=self.quantizationBitParams, 
                             bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
@@ -156,7 +151,6 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [fault_idx])
 
-            # fault_val = flipFloat(tensorData[fault_idx], bit=self.injectionBit, log=self.log)
             fault_val = bitFlip(tensorData[fault_idx], size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
             faulty_res.append((fault_idx, fault_val))
@@ -173,8 +167,6 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, channel_idx, feat_idx])
 
-            # faulty_val = flipFloat(tensorData[filter_idx][channel_idx][feat_idx], bit=self.injectionBit, 
-            #             log=self.log) 
             faulty_val = bitFlip(tensorData[filter_idx][channel_idx][feat_idx], size=self.quantizationBitWeights, bit=self.injectionBit, 
                         log=self.log, quantized=self.quantizationMode) 
             
@@ -192,8 +184,6 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, channel_idx, feat_row_idx, feat_col_idx])
 
-            # faulty_val = flipFloat(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
-            #             bit=self.injectionBit, log=self.log) 
             faulty_val = bitFlip(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
                         size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
          
@@ -208,7 +198,6 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, feat_idx])
 
-            # faulty_val = flipFloat(tensorData[filter_idx][feat_idx], bit=self.injectionBit, log=self.log)
             faulty_val = bitFlip(tensorData[filter_idx][feat_idx], size=self.quantizationBitWeights, 
                         bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
