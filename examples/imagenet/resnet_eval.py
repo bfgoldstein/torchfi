@@ -97,8 +97,6 @@ parser.add_argument('-wts', '--weights', dest='fiWeights', action='store_true',
 
 parser.add_argument('--scores', dest='scores', action='store_true',
                     help='turn scores loging on')
-parser.add_argument('--deltas', dest='deltas', action='store_true',
-                    help='turn deltas loging on')
 
 parser.add_argument('--prefix-output', dest='fidPrefix', default='out', type=str,
                     help='prefix of output filenames')
@@ -385,12 +383,6 @@ def validate(val_loader, model, criterion, args):
             sdcs.updateFaultyBatchPred(predictions)
             sdcs.updateFaultyBatchScore(scores)
 
-            if args.deltas:
-                deltas, delta_miss, delta_correct = calculateDeltas(sdcs.goldenPred[i], sdcs.goldenScores[i], output)
-                sdcs.deltas.append(deltas)
-                sdcs.delta_miss.append(delta_miss)
-                sdcs.delta_correct.append(delta_correct)
-
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
@@ -419,9 +411,6 @@ def validate(val_loader, model, criterion, args):
         if args.scores:
             sdcs.writeScores(args.fidPrefix)
             sdcs.writeScoresNPZData(args.fidPrefix)
-
-        if args.deltas:
-            sdcs.writeDeltas(args.fidPrefix)
 
         writeOutData(args.fidPrefix, [top1_golden.avg, top5_golden.avg], [top1_faulty.avg, top5_faulty.avg], [sdcs.top1SDC, sdcs.top5SDC])
 
@@ -504,22 +493,6 @@ class SDCMeter(object):
         writeFID(fidGolden, self.goldenScores)
         writeFID(fidFaulty, self.faultyScores)
 
-    def writeDeltas(self, fidPrefixName):
-        def writeFID(fidPath, deltaList):
-            with open(fidPath, 'w') as fid:
-                for batchList in deltaList:
-                    for val in batchList:
-                        fid.write("%2.4f " % val)
-
-        cwd = os.getcwd()
-        fidFull = cwd + '/' + fidPrefixName + "_delta_full.txt"
-        fidMiss = cwd + '/' + fidPrefixName + "_delta_miss.txt"
-        fidCorrect = cwd + '/' + fidPrefixName + "_delta_correct.txt"
-       
-        writeFID(fidFull, self.deltas)
-        writeFID(fidMiss, self.delta_miss)
-        writeFID(fidCorrect, self.delta_correct)
-
     def writeScoresNPZData(self, fidPrefixName):
         def writeFID(fidScore, scores):
             np.savez_compressed(fidScore, *np.vstack(scores))
@@ -540,9 +513,6 @@ class SDCMeter(object):
         self.faultyScores = []
         self.goldenScoresAll = []
         self.faultyScoresAll = []
-        self.deltas = []
-        self.delta_miss = []
-        self.delta_correct = []
 
 
 def accuracy(output, target, topk=(1,)):
@@ -570,40 +540,6 @@ def topN(output, target, topk=(1,)):
         scores, pred = output.topk(maxk, 1, True, True)
     return scores.t(), pred.t()
 
-
-def correctPred(output, target, topk=(1,)):
-    """Computes the correct top k predictions for the specified values of k"""
-    with torch.no_grad():
-        maxk = max(topk)
-        
-        _, pred = output.topk(maxk, 1, True, True)
-        
-        # t() == transpose tensor
-        pred = pred.t()
-        correct = pred.eq(target.view(1, -1).expand_as(pred))
-    return correct
-
-def calculateDeltas(goldenPred, goldenScores, faultyOutput):
-    with torch.no_grad():
-        scores, pred = faultyOutput.topk(1, 1, True, True)
-        fpred = pred.t()
-        fscores = scores.t()
-        
-        deltas = []
-        delta_miss = []
-        delta_correct = []
-
-        for idx in range(0, len(goldenPred[0])):
-            if goldenPred[0][idx] == fpred[0][idx]:
-                delta = goldenScores[0][idx] - fscores[0][idx]
-                delta_correct.append(delta)
-                deltas.append(delta)
-            else:
-                delta = goldenScores[0][idx] - faultyOutput[idx][goldenPred[0][idx]]
-                delta_miss.append(delta)
-                deltas.append(delta)
-
-        return deltas, delta_miss, delta_correct
 
 def writeOutData(fidPrefixName, accGolden, accFaulty, sdcs):
     cwd = os.getcwd()
