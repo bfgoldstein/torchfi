@@ -81,6 +81,11 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'multi node data parallel training')
 
 
+parser.add_argument('--golden', dest='golden', action='store_true',
+                    help='Run golden version')
+parser.add_argument('--faulty', dest='faulty', action='store_true',
+                    help='Run faulty version')
+
 #####
 ##  Fault Injection Flags
 #####
@@ -301,11 +306,6 @@ def validate(val_loader, model, criterion, args):
         if not(args.fiFeats ^ args.fiWeights): 
             logConfig(" ", "Setting random mode.")
     logConfig("batch size", "{}".format(args.batch_size))
-
-    batch_time = AverageMeter()
-    top1_golden = AverageMeter()
-    top5_golden = AverageMeter()
-    sdcs = SDCMeter()
     
     # switch to evaluate mode
     model.eval()
@@ -318,101 +318,112 @@ def validate(val_loader, model, criterion, args):
     fi.traverseModel(model)
     print(model._modules.items())
 
+    batch_time = AverageMeter()
+    sdcs = SDCMeter()
+
     # Golden Run
-    fi.injectionMode = False
-    
-    with torch.no_grad():
-        end = time.time()
-        for i, (input, target) in enumerate(val_loader):
-            if args.gpu is not None:
-                input = input.cuda(args.gpu, non_blocking=True)
-                target = target.cuda(args.gpu, non_blocking=True)
-            
-            # compute output
-            output = model(input)
+    if args.golden:
+        top1_golden = AverageMeter()
+        top5_golden = AverageMeter()
 
-            # measure accuracy
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
-            top1_golden.update(acc1[0], input.size(0))
-            top5_golden.update(acc5[0], input.size(0))
-
-            sdcs.updateGoldenData(output)
-
-            scores, predictions = topN(output, target, topk=(1,5))
-            sdcs.updateGoldenBatchPred(predictions)
-            sdcs.updateGoldenBatchScore(scores)
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
+        fi.injectionMode = False
+        
+        with torch.no_grad():
             end = time.time()
+            for i, (input, target) in enumerate(val_loader):
+                if args.gpu is not None:
+                    input = input.cuda(args.gpu, non_blocking=True)
+                    target = target.cuda(args.gpu, non_blocking=True)
+                
+                # compute output
+                output = model(input)
 
-            if i % args.print_freq == 0:
-                print('Golden Run: [{0}/{1}]\t'
-                      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                      'Acc@1 {top1_golden.val:.3f} ({top1_golden.avg:.3f})\t'
-                      'Acc@5 {top5_golden.val:.3f} ({top5_golden.avg:.3f})'.format(
-                       i, len(val_loader), batch_time=batch_time, top1_golden=top1_golden, top5_golden=top5_golden))
-            # break
+                # measure accuracy
+                acc1, acc5 = accuracy(output, target, topk=(1, 5))
+                top1_golden.update(acc1[0], input.size(0))
+                top5_golden.update(acc5[0], input.size(0))
+
+                sdcs.updateGoldenData(output)
+
+                scores, predictions = topN(output, target, topk=(1,5))
+                sdcs.updateGoldenBatchPred(predictions)
+                sdcs.updateGoldenBatchScore(scores)
+
+                # measure elapsed time
+                batch_time.update(time.time() - end)
+                end = time.time()
+
+                if i % args.print_freq == 0:
+                    print('Golden Run: [{0}/{1}]\t'
+                        'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                        'Acc@1 {top1_golden.val:.3f} ({top1_golden.avg:.3f})\t'
+                        'Acc@5 {top5_golden.val:.3f} ({top5_golden.avg:.3f})'.format(
+                        i, len(val_loader), batch_time=batch_time, top1_golden=top1_golden, top5_golden=top5_golden))
+                # break
 
     batch_time.reset()
-    top1_faulty = AverageMeter()
-    top5_faulty = AverageMeter()
 
     # Faulty Run
-    fi.injectionMode = True
+    if args.faulty:
+        top1_faulty = AverageMeter()
+        top5_faulty = AverageMeter()
+        
+        fi.injectionMode = True
 
-    with torch.no_grad():
-        end = time.time()
-
-        for i, (input, target) in enumerate(val_loader):
-            if args.gpu is not None:
-                input = input.cuda(args.gpu, non_blocking=True)
-                target = target.cuda(args.gpu, non_blocking=True)
-
-            # compute output
-            output = model(input)
-            
-            # measure accuracy
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
-            top1_faulty.update(acc1[0], input.size(0))
-            top5_faulty.update(acc5[0], input.size(0))
-
-            sdcs.updateFaultyData(output)
-
-            scores, predictions = topN(output, target, topk=(1,5))
-            sdcs.updateFaultyBatchPred(predictions)
-            sdcs.updateFaultyBatchScore(scores)
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
+        with torch.no_grad():
             end = time.time()
 
-            if i % args.print_freq == 0:
-                print('Faulty Run: [{0}/{1}]\t'
-                      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                      'Acc@1 {top1_faulty.val:.3f} ({top1_faulty.avg:.3f})\t'
-                      'Acc@5 {top5_faulty.val:.3f} ({top5_faulty.avg:.3f})'.format(
-                       i, len(val_loader), batch_time=batch_time, top1_faulty=top1_faulty, top5_faulty=top5_faulty))
-            # break
+            for i, (input, target) in enumerate(val_loader):
+                if args.gpu is not None:
+                    input = input.cuda(args.gpu, non_blocking=True)
+                    target = target.cuda(args.gpu, non_blocking=True)
+
+                # compute output
+                output = model(input)
+                
+                # measure accuracy
+                acc1, acc5 = accuracy(output, target, topk=(1, 5))
+                top1_faulty.update(acc1[0], input.size(0))
+                top5_faulty.update(acc5[0], input.size(0))
+
+                sdcs.updateFaultyData(output)
+
+                scores, predictions = topN(output, target, topk=(1,5))
+                sdcs.updateFaultyBatchPred(predictions)
+                sdcs.updateFaultyBatchScore(scores)
+
+                # measure elapsed time
+                batch_time.update(time.time() - end)
+                end = time.time()
+
+                if i % args.print_freq == 0:
+                    print('Faulty Run: [{0}/{1}]\t'
+                        'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                        'Acc@1 {top1_faulty.val:.3f} ({top1_faulty.avg:.3f})\t'
+                        'Acc@5 {top5_faulty.val:.3f} ({top5_faulty.avg:.3f})'.format(
+                        i, len(val_loader), batch_time=batch_time, top1_faulty=top1_faulty, top5_faulty=top5_faulty))
+                # break
+            
+    if args.golden:
         print('Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
-              .format(top1_golden=top1_golden, top5_golden=top5_golden))
+            .format(top1_golden=top1_golden, top5_golden=top5_golden))
 
+    if args.faulty:
         print('Faulty Run * Acc@1 {top1_faulty.avg:.3f} Acc@5 {top5_faulty.avg:.3f}'
-              .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty))
+            .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty))
 
+    if args.golden and args.faulty:
         print('Acc@1 {top1_diff:.3f} Acc@5 {top5_diff:.3f}'
-              .format(top1_diff=(top1_golden.avg - top1_faulty.avg), top5_diff=(top5_golden.avg - top5_faulty.avg)))
-        
+            .format(top1_diff=(top1_golden.avg - top1_faulty.avg), top5_diff=(top5_golden.avg - top5_faulty.avg)))        
         sdcs.calculteSDCs()
-        
         print('SDCs * SDC@1 {sdc.top1SDC:.3f} SDC@5 {sdc.top5SDC:.3f}'
-              .format(sdc=sdcs))
+            .format(sdc=sdcs))
 
-        if args.scores:
-            sdcs.writeScores(args.fidPrefix)
-            sdcs.writeScoresNPZData(args.fidPrefix)
+    if args.scores:
+        sdcs.writeScoresNPZData(args.fidPrefix, args.golden, args.faulty)
+        # sdcs.writeScores(args.fidPrefix, args.golden, args.faulty)
 
-        writeOutData(args.fidPrefix, [top1_golden.avg, top5_golden.avg], [top1_faulty.avg, top5_faulty.avg], [sdcs.top1SDC, sdcs.top5SDC])
+    # writeOutData(args.fidPrefix, [top1_golden.avg, top5_golden.avg], [top1_faulty.avg, top5_faulty.avg], [sdcs.top1SDC, sdcs.top5SDC])
 
     return
 
@@ -479,7 +490,7 @@ class SDCMeter(object):
         self.top1SDC *= 100
         self.top5SDC *= 100
 
-    def writeScores(self, fidPrefixName):
+    def writeScores(self, fidPrefixName, golden, faulty):
         def writeFID(fidScore, scores):
             with open(fidScore, 'w') as fscore:
                 for scoreTensor in scores:
@@ -487,20 +498,22 @@ class SDCMeter(object):
                         for val in row:
                             fscore.write("%2.4f " % val)
                         fscore.write("\n")
-        cwd = os.getcwd()
-        fidGolden = cwd + '/' + fidPrefixName + '_score_golden.txt'
-        fidFaulty = cwd + '/' + fidPrefixName + '_score_faulty.txt'
-        writeFID(fidGolden, self.goldenScores)
-        writeFID(fidFaulty, self.faultyScores)
+        if golden:
+            fidGolden = fidPrefixName + '_score_golden.txt'
+            writeFID(fidGolden, self.goldenScores)
+        if faulty:
+            fidFaulty = fidPrefixName + '_score_faulty.txt'
+            writeFID(fidFaulty, self.faultyScores)
 
-    def writeScoresNPZData(self, fidPrefixName):
+    def writeScoresNPZData(self, fidPrefixName, golden, faulty):
         def writeFID(fidScore, scores):
             np.savez_compressed(fidScore, *np.vstack(scores))
-        cwd = os.getcwd()
-        fidGolden = cwd + '/' + fidPrefixName + '_score_golden.npz'
-        fidFaulty = cwd + '/' + fidPrefixName + '_score_faulty.npz'
-        writeFID(fidGolden, self.goldenScoresAll)
-        writeFID(fidFaulty, self.faultyScoresAll)
+        if golden:
+            fidGolden = fidPrefixName + '_score_golden.npz'
+            writeFID(fidGolden, self.goldenScoresAll)
+        if faulty:
+            fidFaulty = fidPrefixName + '_score_faulty.npz'
+            writeFID(fidFaulty, self.faultyScoresAll)
 
     def reset(self):
         self.acc1 = 0
