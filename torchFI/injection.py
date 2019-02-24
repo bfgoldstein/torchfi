@@ -79,6 +79,9 @@ class FI(object):
             feature_size = tensorShape
             fault_idx = np.random.randint(0, feature_size)
             
+            while tensorData[fault_idx] == 0.0:
+                fault_idx = np.random.randint(0, feature_size)
+
             if self.log:
                 logInjectionNode("Node index:", [fault_idx])
 
@@ -95,6 +98,10 @@ class FI(object):
             for batch_idx in range(0, batches_size):
                 channel_idx = np.random.randint(0, channels_size)
                 feat_idx = np.random.randint(0, feat_size)
+
+                while tensorData[batch_idx][channel_idx][feat_idx] == 0.0:
+                    channel_idx = np.random.randint(0, channels_size)
+                    feat_idx = np.random.randint(0, feat_size)
 
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, channel_idx, feat_idx])
@@ -113,6 +120,11 @@ class FI(object):
                 channel_idx = np.random.randint(0, channels_size)
                 feat_row_idx = np.random.randint(0, feat_row_size)
                 feat_col_idx = np.random.randint(0, feat_col_size)
+
+                while tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx] == 0.0:
+                    channel_idx = np.random.randint(0, channels_size)
+                    feat_row_idx = np.random.randint(0, feat_row_size)
+                    feat_col_idx = np.random.randint(0, feat_col_size)
                 
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, channel_idx, feat_row_idx, feat_col_idx])
@@ -147,6 +159,9 @@ class FI(object):
         if tensorShape == 1:
             feature_size = tensorShape
             fault_idx = np.random.randint(0, feature_size)
+
+            while tensorData[fault_idx] == 0.0:
+                fault_idx = np.random.randint(0, feature_size)
             
             if self.log:
                 logInjectionNode("Node index:", [fault_idx])
@@ -163,6 +178,11 @@ class FI(object):
             filter_idx = np.random.randint(0, filters_size)
             channel_idx = np.random.randint(0, num_channels)
             feat_idx = np.random.randint(0, feat_size)
+
+            while tensorData[filter_idx][channel_idx][feat_idx] == 0.0:
+                filter_idx = np.random.randint(0, filters_size)
+                channel_idx = np.random.randint(0, num_channels)
+                feat_idx = np.random.randint(0, feat_size)
 
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, channel_idx, feat_idx])
@@ -181,6 +201,12 @@ class FI(object):
             feat_row_idx = np.random.randint(0, feat_row_size)
             feat_col_idx = np.random.randint(0, feat_col_size)
 
+            while tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx] == 0.0:
+                filter_idx = np.random.randint(0, filters_size)
+                channel_idx = np.random.randint(0, channels_size)
+                feat_row_idx = np.random.randint(0, feat_row_size)
+                feat_col_idx = np.random.randint(0, feat_col_size)
+
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, channel_idx, feat_row_idx, feat_col_idx])
 
@@ -194,6 +220,10 @@ class FI(object):
 
             filter_idx = np.random.randint(0, filters_size)
             feat_idx = np.random.randint(0, feat_size)
+
+            while tensorData[filter_idx][feat_idx] == 0.0:
+                filter_idx = np.random.randint(0, filters_size)
+                feat_idx = np.random.randint(0, feat_size)
 
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, feat_idx])
