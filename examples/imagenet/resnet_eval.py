@@ -103,7 +103,7 @@ parser.add_argument('-wts', '--weights', dest='fiWeights', action='store_true',
 parser.add_argument('--scores', dest='scores', action='store_true',
                     help='turn scores loging on')
 
-parser.add_argument('--prefix-output', dest='fidPrefix', default='out', type=str,
+parser.add_argument('--prefix-output', dest='fidPrefix', default=None, type=str,
                     help='prefix of output filenames')
 
 #####
@@ -310,8 +310,11 @@ def validate(val_loader, model, criterion, args):
     # switch to evaluate mode
     model.eval()
 
+    record = Record(args.arch, args.batch_size, args.layer, args.fiFeats, args.fiWeights, args.quant_bfeats, args.quant_bwts, args.quant_baccum, 
+                    injection=args.injection, quantization=args.quantize)
+
     # applying faulty injection scheme
-    fi = FI(model, fiMode=args.injection, fiLayer=args.layer, fiBit=args.bit, fiFeatures=args.fiFeats, fiWeights=args.fiWeights,
+    fi = FI(model, record, fiMode=args.injection, fiLayer=args.layer, fiBit=args.bit, fiFeatures=args.fiFeats, fiWeights=args.fiWeights,
             quantMode=args.quantize, quantType=args.quant_type, quantBitFeats=args.quant_bfeats, quantBitWts=args.quant_bwts, quantBitAccum=args.quant_baccum,
             quantClip=args.quant_clip, quantChannel=args.quant_channel, log=args.log)
 
@@ -349,6 +352,10 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateGoldenBatchPred(predictions)
                 sdcs.updateGoldenBatchScore(scores)
 
+                record.addScores(scores)
+                record.addPredictions(predictions)
+                record.addTargets(correctPred(output, target))
+
                 # measure elapsed time
                 batch_time.update(time.time() - end)
                 end = time.time()
@@ -380,7 +387,7 @@ def validate(val_loader, model, criterion, args):
 
                 # compute output
                 output = model(input)
-                
+
                 # measure accuracy
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
                 top1_faulty.update(acc1[0], input.size(0))
@@ -392,6 +399,10 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateFaultyBatchPred(predictions)
                 sdcs.updateFaultyBatchScore(scores)
 
+                record.addScores(scores)
+                record.addPredictions(predictions)
+                record.addTargets(correctPred(output, target))
+                
                 # measure elapsed time
                 batch_time.update(time.time() - end)
                 end = time.time()
@@ -407,10 +418,12 @@ def validate(val_loader, model, criterion, args):
     if args.golden:
         print('Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
             .format(top1_golden=top1_golden, top5_golden=top5_golden))
+        record.setAccuracies(float(top1_golden.avg), float(top5_golden.avg))
 
     if args.faulty:
         print('Faulty Run * Acc@1 {top1_faulty.avg:.3f} Acc@5 {top5_faulty.avg:.3f}'
             .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty))
+        record.setAccuracies(float(top1_faulty.avg), float(top5_faulty.avg))
 
     if args.golden and args.faulty:
         print('Acc@1 {top1_diff:.3f} Acc@5 {top5_diff:.3f}'
@@ -421,9 +434,9 @@ def validate(val_loader, model, criterion, args):
 
     if args.scores:
         sdcs.writeScoresNPZData(args.fidPrefix, args.golden, args.faulty)
-        # sdcs.writeScores(args.fidPrefix, args.golden, args.faulty)
 
-    # writeOutData(args.fidPrefix, [top1_golden.avg, top5_golden.avg], [top1_faulty.avg, top5_faulty.avg], [sdcs.top1SDC, sdcs.top5SDC])
+    if args.fidPrefix is not None:
+        saveRecord(args.fidPrefix, record)
 
     return
 
@@ -545,6 +558,15 @@ def accuracy(output, target, topk=(1,)):
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
 
+def correctPred(output, target):
+    """Return the accuracy of the expected label"""
+    with torch.no_grad():
+        res = []
+        for out, label in zip(output, target):
+            acc = out[label]
+            res.append((float(acc.cpu()), int(label.cpu())))
+    return res
+
 
 def topN(output, target, topk=(1,)):
     """Return label prediction from top 5 classes"""
@@ -559,6 +581,14 @@ def writeOutData(fidPrefixName, accGolden, accFaulty, sdcs):
     fid = cwd + '/' + fidPrefixName + '_out.npz'
     np.savez_compressed(fid, accGolden=np.array(accGolden, dtype=np.float32), accFaulty=np.array(accFaulty, 
                         dtype=np.float32), sdcs=np.array(sdcs, dtype=np.float32))
+
+
+def saveRecord(fidPrefixName, record):
+    import pickle
+    fname = fidPrefixName + "_record.pkl" 
+    with open(fname, 'wb') as outFID:
+        pickle.dump(record, outFID)
+
 
 
 if __name__ == '__main__':
