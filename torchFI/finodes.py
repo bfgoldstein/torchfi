@@ -25,7 +25,8 @@ class FIConv2d(nn.Conv2d):
             if not(self.fi.injectionFeatures ^ self.fi.injectionWeights):
                 # decide where to apply injection
                 # weights = 0, activations = 1 
-                locInjection = np.random.randint(0, 2)
+                #locInjection = np.random.randint(0, 2)
+                locInjection = np.random.binomial(1, .5)
             else:
                 locInjection = self.fi.injectionFeatures
 
@@ -82,7 +83,8 @@ class FILinear(nn.Linear):
             if not(self.fi.injectionFeatures ^ self.fi.injectionWeights):
                 # decide where to apply injection
                 # weights = 0, activations = 1 
-                locInjection = np.random.randint(0, 2)
+                # locInjection = np.random.randint(0, 2)
+                locInjection = np.random.binomial(1, .5)
             else:
                 locInjection = self.fi.injectionFeatures
 
