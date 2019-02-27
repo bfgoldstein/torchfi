@@ -17,7 +17,7 @@ def flipFloat(val, bit=None, log=False):
         logInjectionBit("\tFlipping bit ", bit)
         logInjectionVal("\tOriginal: ", float(val), " Corrupted: ", faultValue.float)
 
-    return faultValue.float
+    return faultValue.float, bit
 
 def flipInt(val, size, bit=None, log=False):
     # Cast integer to BitArray and flip (invert) random bit 0-N
@@ -32,7 +32,7 @@ def flipInt(val, size, bit=None, log=False):
         logInjectionBit("\tFlipping bit ", bit)
         logInjectionVal("\tOriginal: ", int(val), " Corrupted: ", faultValue.int)
 
-    return faultValue.int
+    return faultValue.int, bit
 
 
 def bitFlip(value, size=8, bit=None, log=False, quantized=False):

@@ -13,10 +13,11 @@ from util import *
 
 class FI(object):
 
-    def __init__(self, model, fiMode=False, fiBit=None, fiLayer=0, fiFeatures=True, fiWeights=True, 
+    def __init__(self, model, record, fiMode=False, fiBit=None, fiLayer=0, fiFeatures=True, fiWeights=True, 
                 quantMode=False, quantType=LinearQuantMode.SYMMETRIC, quantBitFeats=8, quantBitWts=8, 
                 quantBitAccum=32, quantClip=False, quantChannel=False, log=False):
         self.model = model
+        self.record = record
         self.log = log
 
         self.quantizationMode = quantMode
@@ -85,10 +86,12 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [fault_idx])
 
-            fault_val = bitFlip(tensorData[fault_idx], size=self.quantizationBitParams, 
+            faulty_val, bit = bitFlip(tensorData[fault_idx], size=self.quantizationBitParams, 
                         bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
-            faulty_res.append((fault_idx, fault_val))
+            faulty_res.append((fault_idx, faulty_val))
+
+            self.recordData(bit, tensorData[fault_idx], faulty_val, (0, fault_idx))
 
             return faulty_res
 
@@ -106,10 +109,13 @@ class FI(object):
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, channel_idx, feat_idx])
 
-                faulty_val = bitFlip(tensorData[batch_idx][channel_idx][feat_idx], size=self.quantizationBitParams, 
+                faulty_val, bit = bitFlip(tensorData[batch_idx][channel_idx][feat_idx], size=self.quantizationBitParams, 
                             bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
         
                 faulty_res.append((channel_idx, feat_idx, faulty_val))
+
+                self.recordData(bit, tensorData[batch_idx][channel_idx][feat_idx],
+                                 faulty_val, (0, batch_idx, channel_idx, feat_idx))
 
             return faulty_res
 
@@ -129,32 +135,18 @@ class FI(object):
                 if self.log:
                     logInjectionNode("Node index:", [batch_idx, channel_idx, feat_row_idx, feat_col_idx])
                 
-                faulty_val = bitFlip(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], size=self.quantizationBitParams, 
+                faulty_val, bit = bitFlip(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], size=self.quantizationBitParams, 
                             bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
 
                 faulty_res.append((channel_idx, feat_row_idx, feat_col_idx, faulty_val))
+
+                self.recordData(bit, tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx],
+                                 faulty_val, (0, batch_idx, channel_idx, feat_row_idx, feat_col_idx))
             
-            return faulty_res
-
-        else:
-            batches_size, feat_size = tensorShape
-
-            for batch_idx in range(0, batches_size):
-                feat_idx = np.random.randint(0, feat_size)
-
-                if self.log:
-                    logInjectionNode("Node index:", [batch_idx, feat_idx])
- 
-                faulty_val = bitFlip(tensorData[batch_idx][feat_idx], size=self.quantizationBitParams, 
-                            bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
-
-                faulty_res.append((feat_idx, faulty_val))
-
             return faulty_res
 
 
     def injectWeights(self, tensorData, tensorShape):
-        faulty_res = []
 
         if tensorShape == 1:
             feature_size = tensorShape
@@ -166,11 +158,12 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [fault_idx])
 
-            fault_val = bitFlip(tensorData[fault_idx], size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
+            faulty_val, bit = bitFlip(tensorData[fault_idx], size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
 
-            faulty_res.append((fault_idx, fault_val))
+            self.recordData(bit, tensorData[fault_idx],
+                           faulty_val, (1, fault_idx))
 
-            return faulty_res
+            return (fault_idx, faulty_val)
 
         elif len(tensorShape) == 3:
             filters_size, num_channels, feat_size = tensorShape
@@ -187,9 +180,11 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, channel_idx, feat_idx])
 
-            faulty_val = bitFlip(tensorData[filter_idx][channel_idx][feat_idx], size=self.quantizationBitWeights, bit=self.injectionBit, 
+            faulty_val, bit = bitFlip(tensorData[filter_idx][channel_idx][feat_idx], size=self.quantizationBitWeights, bit=self.injectionBit, 
                         log=self.log, quantized=self.quantizationMode) 
             
+            self.recordData(bit, tensorData[filter_idx][channel_idx][feat_idx],
+                             faulty_val, (1, filter_idx, channel_idx, feat_idx))
 
             return (filter_idx, channel_idx, feat_idx, faulty_val)
 
@@ -210,28 +205,13 @@ class FI(object):
             if self.log:
                 logInjectionNode("Node index:", [filter_idx, channel_idx, feat_row_idx, feat_col_idx])
 
-            faulty_val = bitFlip(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
+            faulty_val, bit = bitFlip(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
                         size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
-         
+
+            self.recordData(bit, tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx],
+                             faulty_val, (1, filter_idx, channel_idx, feat_row_idx, feat_col_idx))
+
             return (filter_idx, channel_idx, feat_row_idx, feat_col_idx, faulty_val)
-
-        else:
-            filters_size, feat_size = tensorShape
-
-            filter_idx = np.random.randint(0, filters_size)
-            feat_idx = np.random.randint(0, feat_size)
-
-            while tensorData[filter_idx][feat_idx] == 0.0:
-                filter_idx = np.random.randint(0, filters_size)
-                feat_idx = np.random.randint(0, feat_size)
-
-            if self.log:
-                logInjectionNode("Node index:", [filter_idx, feat_idx])
-
-            faulty_val = bitFlip(tensorData[filter_idx][feat_idx], size=self.quantizationBitWeights, 
-                        bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
-
-            return (filter_idx, feat_idx, faulty_val)
 
     def setInjectionMode(self, mode):
         if self.log:
@@ -251,3 +231,9 @@ class FI(object):
             return True
         except StopIteration:
             return False
+
+    def recordData(self, bit, original, faulty, location):
+        self.record.addFiBit(bit)
+        self.record.addOriginalValue(float(original.cpu()))
+        self.record.addFiValue(faulty)
+        self.record.addFiLocation(location)
