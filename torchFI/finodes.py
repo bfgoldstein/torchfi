@@ -96,12 +96,14 @@ class FILinear(nn.Linear):
                 
                 faulty_res = self.fi.injectFeatures(input.data, tensorShape)
 
-                if tensorShape == 3:
+                if len(tensorShape) == 3:
                     for batch, (channel, feat_idx, faulty_val) in enumerate(faulty_res):
                         input.data[batch][channel][feat_idx] = faulty_val
-                else:
+                elif len(tensorShape) == 2:
                     for batch, (feat_idx, faulty_val) in enumerate(faulty_res):
                         input.data[batch][feat_idx] = faulty_val
+                else:
+                    raise Exception('Injection not implemented for tensor with shape: ' + tensorShape) 
 
                 return nn.functional.linear(input, self.weight, self.bias)
             else:
@@ -115,12 +117,14 @@ class FILinear(nn.Linear):
                 
                 faulty_res = self.fi.injectWeights(self.weight.data, tensorShape)
 
-                if tensorShape == 3:
+                if len(tensorShape) == 3:
                     filter, channel, feat_idx, faulty_val = faulty_res
                     weightFI.data[filter][channel][feat_idx] = faulty_val
-                else:
+                elif len(tensorShape) == 2:
                     filter, feat_idx, faulty_val = faulty_res
                     weightFI.data[filter][feat_idx] = faulty_val
+                else:
+                    raise Exception('Injection not implemented for tensor with shape: ' + tensorShape) 
 
                 return nn.functional.linear(input, weightFI, self.bias)
         else:

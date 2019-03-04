@@ -95,6 +95,28 @@ class FI(object):
 
             return faulty_res
 
+        elif len(tensorShape) == 2:
+            batches_size, feat_size = tensorShape
+
+            for batch_idx in range(0, batches_size):
+                feat_idx = np.random.randint(0, feat_size)
+
+                while tensorData[batch_idx][feat_idx] == 0.0:
+                    feat_idx = np.random.randint(0, feat_size)
+
+                if self.log:
+                    logInjectionNode("Node index:", [batch_idx, feat_idx])
+
+                faulty_val, bit = bitFlip(tensorData[batch_idx][feat_idx], size=self.quantizationBitParams, 
+                            bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
+        
+                faulty_res.append((feat_idx, faulty_val))
+
+                self.recordData(bit, tensorData[batch_idx][feat_idx],
+                                 faulty_val, (0, batch_idx, feat_idx))
+
+            return faulty_res
+
         elif len(tensorShape) == 3:
             batches_size, channels_size, feat_size = tensorShape
 
@@ -119,7 +141,7 @@ class FI(object):
 
             return faulty_res
 
-        if len(tensorShape) == 4:
+        elif len(tensorShape) == 4:
             batches_size, channels_size, feat_row_size, feat_col_size = tensorShape
 
             for batch_idx in range(0, batches_size):
@@ -165,6 +187,27 @@ class FI(object):
 
             return (fault_idx, faulty_val)
 
+        elif len(tensorShape) == 2:
+            feat_row_size, feat_col_size = tensorShape
+
+            feat_row_idx = np.random.randint(0, feat_row_size)
+            feat_col_idx = np.random.randint(0, feat_col_size)
+
+            while tensorData[feat_row_idx][feat_col_idx] == 0.0:
+                feat_row_idx = np.random.randint(0, feat_row_size)
+                feat_col_idx = np.random.randint(0, feat_col_size)
+
+            if self.log:
+                logInjectionNode("Node index:", [feat_row_idx][feat_col_idx])
+
+            faulty_val, bit = bitFlip(tensorData[feat_row_idx][feat_col_idx], size=self.quantizationBitWeights, bit=self.injectionBit, 
+                        log=self.log, quantized=self.quantizationMode) 
+            
+            self.recordData(bit, tensorData[feat_row_idx][feat_col_idx],
+                             faulty_val, (1, feat_row_idx, feat_col_idx))
+
+            return (feat_row_idx, feat_col_idx, faulty_val)
+
         elif len(tensorShape) == 3:
             filters_size, num_channels, feat_size = tensorShape
 
@@ -188,7 +231,7 @@ class FI(object):
 
             return (filter_idx, channel_idx, feat_idx, faulty_val)
 
-        if len(tensorShape) == 4:
+        elif len(tensorShape) == 4:
             filters_size, channels_size, feat_row_size, feat_col_size = tensorShape
 
             filter_idx = np.random.randint(0, filters_size)
