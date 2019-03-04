@@ -166,6 +166,9 @@ class FI(object):
                                  faulty_val, (0, batch_idx, channel_idx, feat_row_idx, feat_col_idx))
             
             return faulty_res
+            
+        else:
+            raise Exception('Injection not implemented for tensor with shape: ' + tensorShape)
 
 
     def injectWeights(self, tensorData, tensorShape):
@@ -255,6 +258,9 @@ class FI(object):
                              faulty_val, (1, filter_idx, channel_idx, feat_row_idx, feat_col_idx))
 
             return (filter_idx, channel_idx, feat_row_idx, feat_col_idx, faulty_val)
+
+        else:
+            raise Exception('Injection not implemented for tensor with shape: ' + tensorShape)
 
     def setInjectionMode(self, mode):
         if self.log:
