@@ -34,7 +34,6 @@ model_names = sorted(name for name in models.__dict__
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
-
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: ' +
@@ -48,21 +47,29 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     help='mini-batch size (default: 256), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
-
 parser.add_argument('-p', '--print-freq', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
-
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
-
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
-
+parser.add_argument('--world-size', default=-1, type=int,
+                    help='number of nodes for distributed training')
+parser.add_argument('--rank', default=-1, type=int,
+                    help='node rank for distributed training')
+parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
+                    help='url used to set up distributed training')
+parser.add_argument('--dist-backend', default='nccl', type=str,
+                    help='distributed backend')
 parser.add_argument('--seed', default=None, type=int,
                     help='seed for injection')
-
 parser.add_argument('--gpu', default=None, type=int,
                     help='GPU id to use.')
+parser.add_argument('--multiprocessing-distributed', action='store_true',
+                    help='Use multi-processing distributed training to launch '
+                         'N processes per node, which has N GPUs. This is the '
+                         'fastest way to use PyTorch for either single node or '
+                         'multi node data parallel training')
 
 parser.add_argument('--weight_file', metavar='DIR',
                     help='path to weight_file')
@@ -90,7 +97,7 @@ parser.add_argument('-wts', '--weights', dest='fiWeights', action='store_true',
 parser.add_argument('--scores', dest='scores', action='store_true',
                     help='turn scores loging on')
 
-parser.add_argument('--prefix-output', dest='fidPrefix', default='out', type=str,
+parser.add_argument('--prefix-output', dest='fidPrefix', default=None, type=str,
                     help='prefix of output filenames')
 
 #####
@@ -235,7 +242,41 @@ def main():
         torch.manual_seed(args.seed)
         cudnn.deterministic = True
 
-    print("Use GPU: {} for inference".format(args.gpu))
+
+    if args.dist_url == "env://" and args.world_size == -1:
+        args.world_size = int(os.environ["WORLD_SIZE"])
+
+    args.distributed = args.world_size > 1 or args.multiprocessing_distributed
+
+    if args.gpu is not None:
+        ngpus_per_node = torch.cuda.device_count()
+        if args.multiprocessing_distributed:
+            # Since we have ngpus_per_node processes per node, the total world_size
+            # needs to be adjusted accordingly
+            args.world_size = ngpus_per_node * args.world_size
+            # Use torch.multiprocessing.spawn to launch distributed processes: the
+            # main_worker process function
+            mp.spawn(main_gpu_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        else:
+            # Simply call main_worker function
+            main_gpu_worker(args.gpu, ngpus_per_node, args)
+    
+
+def main_gpu_worker(gpu, ngpus_per_node, args):
+    args.gpu = gpu
+
+    if args.gpu is not None:
+        print("Use GPU: {} for inference".format(args.gpu))
+
+    if args.distributed:
+        if args.dist_url == "env://" and args.rank == -1:
+            args.rank = int(os.environ["RANK"])
+        if args.multiprocessing_distributed:
+            # For multiprocessing distributed training, rank needs to be the
+            # global rank among all the processes
+            args.rank = args.rank * ngpus_per_node + gpu
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                                world_size=args.world_size, rank=args.rank)
 
     # create model
     if args.pretrained:
@@ -248,9 +289,29 @@ def main():
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
 
-    torch.cuda.set_device(args.gpu)
-    model = model.cuda(args.gpu)
-    
+    if args.distributed:
+        # For multiprocessing distributed, DistributedDataParallel constructor
+        # should always set the single device scope, otherwise,
+        # DistributedDataParallel will use all available devices.
+        if args.gpu is not None:
+            torch.cuda.set_device(args.gpu)
+            model.cuda(args.gpu)
+            # When using a single GPU per process and per
+            # DistributedDataParallel, we need to divide the batch size
+            # ourselves based on the total number of GPUs we have
+            args.batch_size = int(args.batch_size / ngpus_per_node)
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        else:
+            model.cuda()
+            # DistributedDataParallel will divide and allocate batch_size to all
+            # available GPUs if device_ids are not set
+            model = torch.nn.parallel.DistributedDataParallel(model)
+    elif args.gpu is not None:
+        torch.cuda.set_device(args.gpu)
+        model = model.cuda(args.gpu)
+    else:
+        model = torch.nn.DataParallel(model).cuda()
+
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
 
@@ -274,7 +335,7 @@ def main():
     if args.evaluate:
         validate(val_loader, model, criterion, args)
         return
-
+        
 def validate(val_loader, model, criterion, args):
     # loging configs to screen
     logConfig("model", "{}".format(args.arch))
@@ -300,8 +361,11 @@ def validate(val_loader, model, criterion, args):
     # switch to evaluate mode
     model.eval()
 
+    record = Record(args.arch, args.batch_size, args.layer, args.fiFeats, args.fiWeights, args.quant_bfeats, args.quant_bwts, args.quant_baccum, 
+                    injection=args.injection, quantization=args.quantize)
+
     # applying faulty injection scheme
-    fi = FI(model, fiMode=args.injection, fiLayer=args.layer, fiBit=args.bit, fiFeatures=args.fiFeats, fiWeights=args.fiWeights,
+    fi = FI(model, record, fiMode=args.injection, fiLayer=args.layer, fiBit=args.bit, fiFeatures=args.fiFeats, fiWeights=args.fiWeights,
             quantMode=args.quantize, quantType=args.quant_type, quantBitFeats=args.quant_bfeats, quantBitWts=args.quant_bwts, quantBitAccum=args.quant_baccum,
             quantClip=args.quant_clip, quantChannel=args.quant_channel, log=args.log)
 
@@ -342,6 +406,10 @@ def validate(val_loader, model, criterion, args):
                 scores, predictions = topN(output, target, topk=(1,5))
                 sdcs.updateGoldenBatchPred(predictions)
                 sdcs.updateGoldenBatchScore(scores)
+
+                record.addScores(scores)
+                record.addPredictions(predictions)
+                record.addTargets(correctPred(output, target))
 
                 # measure elapsed time
                 batch_time.update(time.time() - end)
@@ -390,6 +458,10 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateFaultyBatchPred(predictions)
                 sdcs.updateFaultyBatchScore(scores)
 
+                record.addScores(scores)
+                record.addPredictions(predictions)
+                record.addTargets(correctPred(output, target))
+
                 # measure elapsed time
                 batch_time.update(time.time() - end)
                 end = time.time()
@@ -405,10 +477,12 @@ def validate(val_loader, model, criterion, args):
     if args.golden:
         print('Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
             .format(top1_golden=top1_golden, top5_golden=top5_golden))
+        record.setAccuracies(float(top1_golden.avg), float(top5_golden.avg))
 
     if args.faulty:
         print('Faulty Run * Acc@1 {top1_faulty.avg:.3f} Acc@5 {top5_faulty.avg:.3f}'
             .format(top1_faulty=top1_faulty, top5_faulty=top5_faulty))
+        record.setAccuracies(float(top1_faulty.avg), float(top5_faulty.avg))
 
     if args.golden and args.faulty:
         print('Acc@1 {top1_diff:.3f} Acc@5 {top5_diff:.3f}'
@@ -419,6 +493,9 @@ def validate(val_loader, model, criterion, args):
 
     if args.scores:
         sdcs.writeScoresNPZData(args.fidPrefix, args.golden, args.faulty)
+
+    if args.fidPrefix is not None:
+        saveRecord(args.fidPrefix, record)
 
     return
 
@@ -541,12 +618,37 @@ def accuracy(output, target, topk=(1,)):
         return res
 
 
+def correctPred(output, target):
+    """Return the accuracy of the expected label"""
+    with torch.no_grad():
+        res = []
+        for out, label in zip(output, target):
+            acc = out[label]
+            res.append((float(acc.cpu()), int(label.cpu())))
+    return res
+
+
 def topN(output, target, topk=(1,)):
     """Return label prediction from top 5 classes"""
     with torch.no_grad():
         maxk = max(topk)
         scores, pred = output.topk(maxk, 1, True, True)
     return scores.t(), pred.t()
+
+
+def writeOutData(fidPrefixName, accGolden, accFaulty, sdcs):
+    cwd = os.getcwd()
+    fid = cwd + '/' + fidPrefixName + '_out.npz'
+    np.savez_compressed(fid, accGolden=np.array(accGolden, dtype=np.float32), accFaulty=np.array(accFaulty, 
+                        dtype=np.float32), sdcs=np.array(sdcs, dtype=np.float32))
+
+
+def saveRecord(fidPrefixName, record):
+    import pickle
+    fname = fidPrefixName + "_record.pkl" 
+    with open(fname, 'wb') as outFID:
+        pickle.dump(record, outFID)
+
 
 
 if __name__ == '__main__':
