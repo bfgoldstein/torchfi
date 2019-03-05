@@ -84,7 +84,7 @@ class Record(object):
             
             fiValue (1d ndarray): array of floats with value after injection of each batch
             
-            fiLocation (tuple of ints): typle indicating location of faul injection
+            fiLocation (tuple of ints): typle indicating location of fault injection
                 e.g.: (filter, row, column)
 
             quantization (tuple with # bits for (feat, wts, acc)): If not None, quantization 
@@ -96,7 +96,12 @@ class Record(object):
             
             quant_baccum (integer): number of bits for accumulators during quantization
             
-            scores (2d tensor): array of scores (only top 10 values) of each batch
+            scores (2d tensor): array of scores (only top 5 values) of each batch
+
+            predictions (2d tensor): array of labels predicted (only top 5 labels) of each batch
+            
+            targets (2d tensor): array of targets list of each batch. Each target list contains 
+                an integer and float that represents correct label and obtained accuracy respectively.
         """
 
         self.model = model
@@ -128,9 +133,9 @@ class Record(object):
     def addPredictions(self, tensors):
         self.predictions.append(tensors.cpu())
 
-    def addTargets(self, tuples):
-        for tup in tuples:
-            self.targets.append(tup)
+    def addTargets(self, arr):
+        for val in arr:
+            self.targets.append(val)
 
     def addFiBit(self, bit):
         self.fiBit.append(bit)

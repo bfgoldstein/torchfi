@@ -554,7 +554,7 @@ def correctPred(output, target):
         res = []
         for out, label in zip(output, target):
             acc = out[label]
-            res.append((float(acc.cpu()), int(label.cpu())))
+            res.append([int(label.cpu()), float(acc.cpu())])
     return res
 
 
