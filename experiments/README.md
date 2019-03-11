@@ -15,7 +15,7 @@ This tutorial explain how to run torchFI experiments using [ResNet50](https://ar
 
 ### Pre-processing
 
-  PyTorch requires a pre-processing step over ImageNet validation set files. Using the script [valprep.sh](https://github.com/bfgoldstein/torchfi/util/valprep.sh) created by [Soumith Chintala](https://github.com/soumith), move all files to subfolders:
+  PyTorch requires a pre-processing step over ImageNet validation set files. Using the script [valprep.sh](https://github.com/bfgoldstein/torchfi/tree/master/util) created by [Soumith Chintala](https://github.com/soumith), move all files to subfolders:
 
   ```bash
     cp ${project}/torchfi/util/valprep.sh ILSVRC2012_img_val/
@@ -44,7 +44,7 @@ This tutorial explain how to run torchFI experiments using [ResNet50](https://ar
 
 #### Full Set
 
-  [resnet50.sh](https://github.com/bfgoldstein/torchfi/util/resnet50.sh) and [resnet50_pruned.sh](https://github.com/bfgoldstein/torchfi/util/resnet50_pruned.sh) provide a full set (13640 jobs) of fault injection experiments. To run these experiments the pre-processed validation set folder and the batch size should be provided.
+  [resnet50.sh](https://github.com/bfgoldstein/torchfi/blob/master/experiments/resnet50.sh) and [resnet50_pruned.sh](https://github.com/bfgoldstein/torchfi/blob/master/experiments/resnet50_pruned.sh) provide a full set (13640 jobs) of fault injection experiments. To run these experiments the pre-processed validation set folder and the batch size should be provided.
 
   ```bash
     ./resnet50.sh -d /home/dataset/imagenet/ -b 320 -g 0

@@ -32,7 +32,7 @@ We highly recommend installing an [Anaconda](https://www.continuum.io/downloads)
 
 ## Examples/Experiments
 
-Check out [this](https://github.com/bfgoldstein/torchfi/experiments/) torchFI example using ResNet50 model.
+Check out [this](https://github.com/bfgoldstein/torchfi/tree/master/experiments) torchFI example using ResNet50 model.
 
 ## Citation
 
