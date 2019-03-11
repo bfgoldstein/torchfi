@@ -1,3 +1,28 @@
+#
+# This file was created using part of Distiller project developed by:
+#  NervanaSystems https://github.com/NervanaSystems/distiller
+# 
+# Minor changes might were applied to satisfy torchFI project needs
+# 
+# 
+# 
+## Copyright (c) 2018 Intel Corporation
+#
+## Licensed under the Apache License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##      http://www.apache.org/licenses/LICENSE-2.0
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+##
+
+
+
 from .finodes import *
 from .quant_util import *
 
@@ -109,15 +134,6 @@ class QConv2d(FIConv2d):
                                                                   self.current_accum_scale / self.b_scale, 0,
                                                                   self.accum_min_q_val, self.accum_max_q_val)
 
-        # Note the main terms within the summation is:
-        #   (x_q + zp_x) * (w_q + zp_w)
-        # In a performance-optimized solution, we would expand the parentheses and perform the computation similar
-        # to what is described here:
-        #   https://github.com/google/gemmlowp/blob/master/doc/low-precision.md#efficient-handling-of-offsets
-        # However, for now we're more concerned with simplicity rather than speed. So we'll just add the zero points
-        # to the input and weights and pass those to the wrapped model. Functionally, since at this point we're
-        # dealing solely with integer values, the results are the same either way.
-
         if self.mode != LinearQuantMode.SYMMETRIC:
             input_q += self.current_in_zero_point
             self.weight.data += self.w_zero_point
@@ -223,15 +239,6 @@ class QLinear(FILinear):
             self.bias.data = linear_quantize_clamp(self.base_b_q + self.b_zero_point,
                                                                   self.current_accum_scale / self.b_scale, 0,
                                                                   self.accum_min_q_val, self.accum_max_q_val)
-
-        # Note the main terms within the summation is:
-        #   (x_q + zp_x) * (w_q + zp_w)
-        # In a performance-optimized solution, we would expand the parentheses and perform the computation similar
-        # to what is described here:
-        #   https://github.com/google/gemmlowp/blob/master/doc/low-precision.md#efficient-handling-of-offsets
-        # However, for now we're more concerned with simplicity rather than speed. So we'll just add the zero points
-        # to the input and weights and pass those to the wrapped model. Functionally, since at this point we're
-        # dealing solely with integer values, the results are the same either way.
 
         if self.mode != LinearQuantMode.SYMMETRIC:
             input_q += self.current_in_zero_point
