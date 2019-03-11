@@ -1,6 +1,6 @@
 # TorchFI
 --------------------------------------------------------------------------------
-[![License]()](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/bfgoldstein/torchfi/LICENSE)
 
 TorchFI is a fault injection framework build on top of [pytorch](https://pytorch.org/) for research purposes.
 
@@ -48,9 +48,12 @@ Please cite XXX in your publications if it helps your research:
 
 ## License
 
-TorchFI code is released under the [XXX license](URL para o arquivo LICENSE).
+TorchFI code is released under the [Apache license 2.0](https://github.com/bfgoldstein/torchfi/LICENSE).
 
 ## Acknowledgments
 
 - [PyTorch](https://github.com/pytorch/pytorch) - Python package for fast tensors computation and DNNs execution
 - [Distiller](https://github.com/NervanaSystems/distiller) - Ported post-quantization code to TorchFI
+
+
+Copyright (c) 2018 Brunno Goldstein
