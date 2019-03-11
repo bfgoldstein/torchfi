@@ -54,6 +54,3 @@ TorchFI code is released under the [Apache license 2.0](https://github.com/bfgol
 
 - [PyTorch](https://github.com/pytorch/pytorch) - Python package for fast tensors computation and DNNs execution
 - [Distiller](https://github.com/NervanaSystems/distiller) - Ported post-quantization code to TorchFI
-
-
-Copyright (c) 2018 Brunno Goldstein

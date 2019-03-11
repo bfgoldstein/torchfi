@@ -50,7 +50,7 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ -z "$dataset" -o -z "$batchSize" ]; then
+if [ -z "$dataset" -o -z "$batchSize" -o -z "$gpu"]; then
     echo -e "${RED}error: missing arguments${NC}"
     usage
     exit 1
@@ -75,8 +75,12 @@ outputPath=${basedir}/experiments/results/original
 outputFilePrefix=resnet50
 outputFileExt=.out
 
+echo "Creating ${outputPath}"
+mkdir -p ${outputPath}
+
+
 # log
-echo "Running Torchfi experiments on"
+echo "Running Torchfi experiments on GPU ${gpu} with"
 echo "Model: ${model}"
 echo "# iterations: ${niters}"
 echo "Output path: ${outputPath}"
@@ -89,12 +93,12 @@ echo ""
 ####
 ##########################################
 
-outputFilePrefixBit=${outputPath}/location/${outputFilePrefix}
+outputFilePrefixBit=${outputPath}/${outputFilePrefix}
 
 fidPrefix=${outputFilePrefixBit}_fp32_golden
-echo "python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=0 ${dataset} > ${fidPrefix}${outputFileExt}"
+echo "python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
 if [ ${debug} -eq 0 ]; then
-    python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=0 ${dataset} > ${fidPrefix}${outputFileExt}
+    python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
 fi
 echo ""
 
@@ -118,9 +122,9 @@ do
                 echo "Location: ${loc}"
                 echo "Batch Size: ${batchSize}"
                 echo "Datset Path: ${dataset}"
-                echo "python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=0 ${dataset} > ${fidPrefix}${outputFileExt}"
+                echo "python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
                 if [ ${debug} -eq 0 ]; then
-                    python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=0 ${dataset} > ${fidPrefix}${outputFileExt}
+                    python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
                 fi
                 echo ""
             done
@@ -136,7 +140,7 @@ done
 ####
 #####################################################
 
-outputFilePrefixLayer=${outputPath}/quantization/layer/${outputFilePrefix}
+outputFilePrefixLayer=${outputPath}/${outputFilePrefix}
 
 declare -a qbits=(16 8 6)
 declare -a qbitsAccs=(64 32 32)
@@ -149,9 +153,9 @@ do
     qbitsAcc=${qbitsAccs[$i]}
 
     fidPrefix=${outputFilePrefixLayer}_int${qbit}_golden
-    echo "python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=0 ${dataset} > ${fidPrefix}${outputFileExt}"
+    echo "python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
     if [ ${debug} -eq 0 ]; then
-        python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=0 ${dataset} > ${fidPrefix}${outputFileExt}
+        python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
     fi
     echo ""
 
@@ -174,9 +178,9 @@ do
                     echo "Quantization: Accumulators INT${qbitsAcc}b"
                     echo "Batch Size: ${batchSize}"
                     echo "Datset Path: ${dataset}"
-                    echo "python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=0 ${dataset} > ${fidPrefix}${outputFileExt}"
+                    echo "python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
                     if [ ${debug} -eq 0 ]; then
-                        python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=0 ${dataset} > ${fidPrefix}${outputFileExt}
+                        python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
                     fi
                     echo ""
                 done
