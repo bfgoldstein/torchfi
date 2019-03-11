@@ -1,3 +1,8 @@
+#
+#   Downloaded from https://raw.githubusercontent.com/soumith/imagenetloader.torch/master/valprep.sh
+#
+#
+
 mkdir -p n01440764	
 mkdir -p n01443537	
 mkdir -p n01484850	

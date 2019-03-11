@@ -11,11 +11,11 @@ This tutorial explain how to run torchFI experiments using [ResNet50](https://ar
 
 ## Dataset
 
-  All experiments require 2012 [ImageNet](http://image-net.org/) validation set (6.4GB).
+  All experiments require 2012 [ImageNet](http://image-net.org/) validation set (6.4GB). Follow [this tutorial](https://github.com/facebook/fb.resnet.torch/blob/master/INSTALL.md#download-the-imagenet-dataset) from Facebook for more information on how to download and extract the validation set.
 
 ### Pre-processing
 
-  PyTorch requires a pre-processing step over Imagenet validation set using the script [valprep.sh](https://github.com/bfgoldstein/torchfi/util/valprep.sh).
+  PyTorch requires a pre-processing step over ImageNet validation set files. Using the script [valprep.sh](https://github.com/bfgoldstein/torchfi/util/valprep.sh) created by [Soumith Chintala](https://github.com/soumith), move all files to subfolders:
 
   ```bash
     cp ${project}/torchfi/util/valprep.sh ILSVRC2012_img_val/
@@ -26,7 +26,7 @@ This tutorial explain how to run torchFI experiments using [ResNet50](https://ar
 
   where ILSVRC2012_img_val is the folder containing the Imagenet 2012 validation set.
 
-  The folder name also should be *val*. One way to keep the orignal name is creating a symbolik link:
+  The root folder should be named *val*. One way to handle it, and keeping the orignal folder name at the same time, is by creating a symbolik link:
 
   ```bash
     ln -s /full/path/to/ILSVRC2012_img_val/ /full/path/to/val/
