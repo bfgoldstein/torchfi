@@ -47,10 +47,13 @@ This tutorial explain how to run torchFI experiments using [ResNet50](https://ar
   [resnet50.sh](https://github.com/bfgoldstein/torchfi/blob/master/experiments/resnet50.sh) and [resnet50_pruned.sh](https://github.com/bfgoldstein/torchfi/blob/master/experiments/resnet50_pruned.sh) provide a full set (13640 jobs) of fault injection experiments. To run these experiments the pre-processed validation set folder and the batch size should be provided.
 
   ```bash
-    ./resnet50.sh -d /home/dataset/imagenet/ -b 320 -g 0
+    cd /path/to/torchfi/
+    ./experiments/resnet50.sh -d /home/dataset/imagenet/ -b 320 -g 0
   ```
 
   The example above run ResNet50 wihtout pruning on GPU id *0* using validation set under */home/dataset/imagenet/* folder with batch size equals to *320*.
+
+  Full set scripts must be run in the root folder of torchfi project.
 
 #### Single run
 
