@@ -50,7 +50,7 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ -z "$dataset" -o -z "$batchSize" -o -z "$gpu"]; then
+if [ -z "$dataset" -o -z "$batchSize" -o -z "$gpu" ]; then
     echo -e "${RED}error: missing arguments${NC}"
     usage
     exit 1
@@ -71,7 +71,7 @@ nlayers=53
 experiment=examples/imagenet/resnet_eval.py
 
 # Define ouput path to save all results
-outputPath=${basedir}/experiments/results/original
+outputPath=${basedir}/experiments/original
 outputFilePrefix=resnet50
 outputFileExt=.out
 
@@ -96,9 +96,9 @@ echo ""
 outputFilePrefixBit=${outputPath}/${outputFilePrefix}
 
 fidPrefix=${outputFilePrefixBit}_fp32_golden
-echo "python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
+echo "python3 ${experiment} -a ${model} --evaluate --pretrained --golden --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
 if [ ${debug} -eq 0 ]; then
-    python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
+    python3 ${experiment} -a ${model} --evaluate --pretrained --golden --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
 fi
 echo ""
 
@@ -122,9 +122,9 @@ do
                 echo "Location: ${loc}"
                 echo "Batch Size: ${batchSize}"
                 echo "Datset Path: ${dataset}"
-                echo "python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
+                echo "python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
                 if [ ${debug} -eq 0 ]; then
-                    python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
+                    python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --prefix-output=${fidPrefix} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
                 fi
                 echo ""
             done
@@ -153,9 +153,9 @@ do
     qbitsAcc=${qbitsAccs[$i]}
 
     fidPrefix=${outputFilePrefixLayer}_int${qbit}_golden
-    echo "python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
+    echo "python3 ${experiment} -a ${model} --evaluate --pretrained --golden --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
     if [ ${debug} -eq 0 ]; then
-        python3 ${experiment} -a ${model} --evaluate --pretrained --golden --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
+        python3 ${experiment} -a ${model} --evaluate --pretrained --golden --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
     fi
     echo ""
 
@@ -178,9 +178,9 @@ do
                     echo "Quantization: Accumulators INT${qbitsAcc}b"
                     echo "Batch Size: ${batchSize}"
                     echo "Datset Path: ${dataset}"
-                    echo "python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
+                    echo "python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}"
                     if [ ${debug} -eq 0 ]; then
-                        python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --scores --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
+                        python3 ${experiment} -a ${model} --evaluate --pretrained --faulty --injection --layer=${layer} --bit=${bit} --${loc} --prefix-output=${fidPrefix} --quantize --quant-feats=${qbit} --quant-wts=${qbit} --quant-accum=${qbitsAcc} --batch-size=${batchSize} --gpu=${gpu} ${dataset} > ${fidPrefix}${outputFileExt}
                     fi
                     echo ""
                 done
