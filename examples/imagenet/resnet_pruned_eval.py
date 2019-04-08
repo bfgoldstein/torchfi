@@ -361,6 +361,9 @@ def validate(val_loader, model, criterion, args):
     # switch to evaluate mode
     model.eval()
 
+    traverse_time = AverageMeter()
+    end = time.time()
+
     record = Record(args.arch, args.batch_size, args.layer, args.fiFeats, args.fiWeights, args.quant_bfeats, args.quant_bwts, args.quant_baccum, 
                     injection=args.injection, quantization=args.quantize)
 
@@ -370,6 +373,9 @@ def validate(val_loader, model, criterion, args):
             quantClip=args.quant_clip, quantChannel=args.quant_channel, log=args.log)
 
     fi.traverseModel(model)
+
+    traverse_time.update(time.time() - end)
+
     print(model._modules.items())
 
     batch_time = AverageMeter()
@@ -377,6 +383,10 @@ def validate(val_loader, model, criterion, args):
 
     # Golden Run
     if args.golden:
+
+        golden_time = AverageMeter()
+        golden_end = time.time()
+
         top1_golden = AverageMeter()
         top5_golden = AverageMeter()
 
@@ -422,11 +432,16 @@ def validate(val_loader, model, criterion, args):
                         'Acc@5 {top5_golden.val:.3f} ({top5_golden.avg:.3f})'.format(
                         i, len(val_loader), batch_time=batch_time, top1_golden=top1_golden, top5_golden=top5_golden))
                 # break
+            golden_time.update(time.time() - golden_end)
 
     batch_time.reset()
 
     # Faulty Run
     if args.faulty:
+
+        faulty_time = AverageMeter()
+        faulty_end = time.time()
+
         top1_faulty = AverageMeter()
         top5_faulty = AverageMeter()
         
@@ -473,6 +488,7 @@ def validate(val_loader, model, criterion, args):
                         'Acc@5 {top5_faulty.val:.3f} ({top5_faulty.avg:.3f})'.format(
                         i, len(val_loader), batch_time=batch_time, top1_faulty=top1_faulty, top5_faulty=top5_faulty))
                 # break
+            faulty_time.update(time.time() - faulty_end)
             
     if args.golden:
         print('Golden Run * Acc@1 {top1_golden.avg:.3f} Acc@5 {top5_golden.avg:.3f}'
@@ -497,6 +513,10 @@ def validate(val_loader, model, criterion, args):
     if args.fidPrefix is not None:
         saveRecord(args.fidPrefix, record)
 
+    print('Traverse Time {traverse_time.val:.3f}\t'
+        'Golden Time {golden_time.val:.3f}\t'
+        'Faulty Time {faulty_time.val:.3f}\t'.format(
+            traverse_time=traverse_time, golden_time=golden_time, faulty_time=faulty_time))
     return
 
 
@@ -624,7 +644,7 @@ def correctPred(output, target):
         res = []
         for out, label in zip(output, target):
             acc = out[label]
-            res.append((float(acc.cpu()), int(label.cpu())))
+            res.append((int(label.cpu()), float(acc.cpu())))
     return res
 
 
