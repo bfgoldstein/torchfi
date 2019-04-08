@@ -27,7 +27,7 @@ We highly recommend installing an [Anaconda](https://www.continuum.io/downloads)
   conda env create -f torchfi.yml
   conda activate torchfi
   cd ${PROJECT_PATH}
-  export PYTHON_PATH=${PYTHON_PATH}
+  export PYTHON_PATH=$PYTHON_PATH:${PYTHON_PATH}
   ```
 
 ## Examples/Experiments
