@@ -351,7 +351,7 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateGoldenBatchPred(predictions)
                 sdcs.updateGoldenBatchScore(scores)
 
-                record.addScores(scores)
+                # record.addScores(scores)
                 record.addPredictions(predictions)
                 record.addTargets(correctPred(output, target))
 
@@ -403,7 +403,7 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateFaultyBatchPred(predictions)
                 sdcs.updateFaultyBatchScore(scores)
 
-                record.addScores(scores)
+                # record.addScores(scores)
                 record.addPredictions(predictions)
                 record.addTargets(correctPred(output, target))
                 
@@ -443,10 +443,15 @@ def validate(val_loader, model, criterion, args):
     if args.fidPrefix is not None:
         saveRecord(args.fidPrefix, record)
 
-    print('Traverse Time {traverse_time.val:.3f}\t'
-        'Golden Time {golden_time.val:.3f}\t'
-        'Faulty Time {faulty_time.val:.3f}\t'.format(
-            traverse_time=traverse_time, golden_time=golden_time, faulty_time=faulty_time))
+    print('Traverse Time {traverse_time.val:.3f}\t'.format(
+                traverse_time=traverse_time))
+    if args.golden:
+        print('Golden Time {golden_time.val:.3f}\t'.format(
+                golden_time=golden_time))
+    if args.faulty:
+        print('Faulty Time {faulty_time.val:.3f}\t'.format(
+                faulty_time=faulty_time))
+    
     return
 
 

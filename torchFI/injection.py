@@ -282,7 +282,8 @@ class FI(object):
             return False
 
     def recordData(self, bit, original, faulty, location):
-        self.record.addFiBit(bit)
-        self.record.addOriginalValue(float(original.cpu()))
-        self.record.addFiValue(faulty)
-        self.record.addFiLocation(location)
+        pass
+        # self.record.addFiBit(bit)
+        # self.record.addOriginalValue(float(original.cpu()))
+        # self.record.addFiValue(faulty)
+        # self.record.addFiLocation(location)

@@ -111,10 +111,10 @@ class Record(object):
         self.fiLayer = fiLayer
         self.fiFeatures = fiFeatures
         self.fiWeights = fiWeights
-        self.fiBit = []
-        self.originalValue = []
-        self.fiValue = []
-        self.fiLocation = [] 
+        # self.fiBit = []
+        # self.originalValue = []
+        # self.fiValue = []
+        # self.fiLocation = [] 
 
         self.quantization = quantization
         self.quant_bfeats = quant_bfeats
@@ -138,16 +138,20 @@ class Record(object):
             self.targets.append(val)
 
     def addFiBit(self, bit):
-        self.fiBit.append(bit)
+        pass
+        # self.fiBit.append(bit)
 
     def addOriginalValue(self, value):
-        self.originalValue.append(value)
+        pass
+        # self.originalValue.append(value)
 
     def addFiValue(self, value):
-        self.fiValue.append(value)
+        pass
+        # self.fiValue.append(value)
 
     def addFiLocation(self, loc):
-        self.fiLocation.append(loc)
+        pass
+        # self.fiLocation.append(loc)
 
     def setAccuracies(self, acc1, acc5):
         self.acc1 = acc1
