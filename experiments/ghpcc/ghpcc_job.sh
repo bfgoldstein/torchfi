@@ -13,7 +13,6 @@ conda activate torchfi
 unset PYTHONPATH
 module load nvidia_cuda_toolkit/9.0/
 
-export PATH=$PATH:/opt/pbs/default/bin
 export PYTHONPATH=$PYTHONPATH:${HOME}/torchfi
 
 cd ${HOME}/torchfi
