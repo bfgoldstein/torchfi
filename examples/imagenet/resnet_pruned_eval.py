@@ -5,6 +5,7 @@ import shutil
 import time
 import warnings
 import sys
+import math
 
 import numpy as np
 
@@ -25,6 +26,7 @@ import torchvision.models as models
 import torchFI as tfi
 from torchFI.injection import FI
 from util.log import *
+from util.tensor import *
 
 
 model_names = sorted(name for name in models.__dict__
@@ -361,6 +363,12 @@ def validate(val_loader, model, criterion, args):
     # switch to evaluate mode
     model.eval()
 
+    _, _, sparsity = countZeroWeights(model)
+
+    numBatchFault = math.ceil(len(val_loader) * (1 - sparsity))
+    batchFault  = np.random.choice(len(val_loader), numBatchFault, replace=False)
+
+
     traverse_time = AverageMeter()
     end = time.time()
 
@@ -451,6 +459,11 @@ def validate(val_loader, model, criterion, args):
             end = time.time()
 
             for i, (input, target) in enumerate(val_loader):
+                if i in batchFault:
+                    fi.injectionMode = True
+                else:
+                    fi.injectionMode = False
+
                 for img in input:
                     img *= 255.0
                     img = img[:, :, [2, 1, 0]]
