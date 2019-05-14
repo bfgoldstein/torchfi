@@ -74,6 +74,52 @@ def loadRecordsLayer(dataType, data, nlayers, bit, loc, experiment):
         return records, sdcs, acc1s
 
 
+def loadRecordsLayerAvg(dataType, data, nlayers, bit, loc, niter, experiment):
+        prefix = experiment + dataType + '_golden'
+        recPath = os.path.join(data, prefix)
+        print('Loading ' + recPath + "_record.pkl")
+
+        golden = loadRecord(recPath)
+
+        records = []
+        sdcs = []
+        acc1s = []
+
+        acc1s.append(golden.acc1)
+
+        for layer in range(0, nlayers):
+                top1SDCSum = 0
+                top5SDCSum = 0
+                acc1Sum = 0
+                titer = 0
+                for iter in range(1, niter + 1):
+                        titer += 1
+                        prefix = getPrefix(experiment, dataType, layer, bit, loc, iter)
+                        recPath = os.path.join(data, prefix)
+
+                        print('Loading ' + recPath + "_record.pkl")
+                        try:
+                                record = loadRecord(recPath)
+                        except FileNotFoundError:
+                                print(recPath + "_record.pkl NOT FOUND. Skipping...")
+                                titer -= 1
+                                continue
+
+                        top1SDC, top5SDC = calculteSDCs(golden.predictions, record.predictions)
+                        top1SDCSum += top1SDC
+                        top5SDCSum += top5SDC
+                        acc1Sum += record.acc1
+
+                top1SDCAvg = float(top1SDCSum) / float(titer)
+                top5SDCAvg = float(top5SDCSum) / float(titer)
+                acc1Avg = float(acc1Sum) / float(titer)
+
+                sdcs.append(top1SDCAvg)
+                acc1s.append(acc1Avg)
+
+        return records, sdcs, acc1s
+
+
 def loadRecordsBit(dataType, data, layer, nbits, loc, experiment):
         prefix = experiment + dataType + '_golden'
         recPath = os.path.join(data, prefix)
@@ -111,12 +157,12 @@ def loadRecord(fidPrefixName):
         return record
 
 
-def getPrefix(experiment, dataType, layer, bit, loc):
+def getPrefix(experiment, dataType, layer, bit, loc, iter=1):
         fidPrefixName = experiment + dataType + '_'
         fidPrefixName += 'layer_' + str(layer) + '_' 
         fidPrefixName += 'bit_' + str(bit) + '_' 
         fidPrefixName += 'loc_' + loc + '_' 
-        fidPrefixName += 'iter_1'
+        fidPrefixName += 'iter_' + str(iter)
         return fidPrefixName
 
 
