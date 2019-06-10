@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import sys
 import numpy as np
@@ -36,7 +37,6 @@ def loadRecordsCorrect(dataType, data, nlayers, bit, loc, experiment):
 
         correctFaulty = predFaulty.eq(torch.LongTensor(target))
 
-        # return correctGolden, correctFaulty, target
         return predGolden, predFaulty, target
 
 
@@ -62,11 +62,7 @@ def loadRecordsLayer(dataType, data, nlayers, bit, loc, experiment):
                 record = loadRecord(recPath)
 
                 top1SDC, top5SDC = calculteSDCs(golden.predictions, record.predictions)
-                # print("Golden: ", golden.acc1, golden.acc5)
-                # print("Faulty: ", record.acc1, record.acc5)
-                # print("SDCs: ", top1SDC, top5SDC)
 
-                # sdcs.append((top1SDC, top5SDC))
                 sdcs.append(top1SDC)
                 acc1s.append(record.acc1)
                 records.append(record)
@@ -139,11 +135,7 @@ def loadRecordsBit(dataType, data, layer, nbits, loc, experiment):
                 record = loadRecord(recPath)
 
                 top1SDC, top5SDC = calculteSDCs(golden.predictions, record.predictions)
-                # print("Golden: ", golden.acc1, golden.acc5)
-                # print("Faulty: ", record.acc1, record.acc5)
-                # print("SDCs: ", top1SDC, top5SDC)
 
-                # sdcs.append((top1SDC, top5SDC))
                 sdcs.append(top1SDC)
                 records.append(record)
 
@@ -181,3 +173,35 @@ def calculteSDCs(goldenPred, faultyPred):
     top1SDC *= 100
     top5SDC *= 100
     return top1SDC, top5SDC
+
+
+def getAdjacency(correctPred, faultyPred):
+    matrixShape = int(max(correctPred)) + 1
+    adj = np.zeros((matrixShape, matrixShape))
+    errors = 0
+
+    for cpred, fpred in zip(correctPred, faultyPred):
+        if cpred > matrixShape or fpred > matrixShape or cpred < 0 or fpred < 0:
+            errors += 1
+            continue
+        else:
+            adj[int(cpred)][int(fpred)] += 1
+
+    return adj, errors
+
+
+def getTopFaulty(adjacency):
+    matrixShape = adjacency.shape()
+    
+    topFaulty = 0
+    row = 0
+    col = 0
+
+    for i in range(matrixShape[0]):
+        for j in range(i + 1, matrixShape[1]):
+            if adjacency[i][j] > topFaulty:
+                topFaulty = adjacency[i][j]
+                row = i
+                col = j
+
+    return row, col, topFaulty

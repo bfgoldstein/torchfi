@@ -1,5 +1,3 @@
-
-
 def countZeroWeights(model):
     zeros = 0
     nnz = 0

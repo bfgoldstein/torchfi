@@ -1,3 +1,6 @@
+import numpy as np
+
+
 from .format_display import *
 
 logMsg = "Log ===>"
@@ -156,3 +159,25 @@ class Record(object):
     def setAccuracies(self, acc1, acc5):
         self.acc1 = acc1
         self.acc5 = acc5
+
+    def getTargetLabels(self):
+        ret = np.zeros(len(self.targets))
+        for i, target in enumerate(self.targets):
+            ret[i] = target[0]
+        return ret
+
+    def getTop1PredictionLabels(self):
+        ret = np.zeros(len(self.predictions))
+        for i, pred in enumerate(self.predictions):
+            ret[i] = pred[0]
+        return ret
+
+    def getTop1PredictionLabelsBatch(self):
+        ret = np.zeros(len(self.predictions) * len(self.predictions[0][0]))
+        
+        i = 0
+        for batch in self.predictions:
+            for pred in batch[0]:
+                ret[i] = pred
+                i += 1
+        return ret
