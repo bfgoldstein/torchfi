@@ -11,12 +11,12 @@ import torch
 
 from util import *
 
-#resnet50_fp32_layer_9_bit_6_loc_weights_iter_1_record.pkl
-
 parser = argparse.ArgumentParser(description='TorchFI Plot')
 parser.add_argument('--original', metavar='DIR', dest='origData',
                     help='path to records')
 parser.add_argument('--pruned', metavar='DIR', dest='prunedData', 
+                    help='path to pruned records')
+parser.add_argument('--prunedComp', metavar='DIR', dest='prunedCompData', 
                     help='path to pruned records')
 parser.add_argument('-feats', '--features', dest='features', action='store_true',
                     help='plot data from FI on features/activations')
@@ -24,18 +24,14 @@ parser.add_argument('-wts', '--weights', dest='weights', action='store_true',
                     help='plot data from FI on weights')
 parser.add_argument('--layers', default=54, dest='nlayers', type=int,
                     help='number of layers to plot')
-parser.add_argument('--bit', default=54, dest='bit', type=int,
-                    help='bit position to plot')
 parser.add_argument('--data_type', default='fp32', dest='dataType', type=str,
                     help='data type to plot')                    
 parser.add_argument('--plotLayer', dest='perlayer', action='store_true',
                     help='plot data per Layer')
-parser.add_argument('--plotBit', dest='perbit', action='store_true',
-                    help='plot data per Bit')
 parser.add_argument('--acc', dest='acc', action='store_true',
                     help='plot sdcs vs acc@1')
-parser.add_argument('--scores', dest='scores', action='store_true',
-                    help='plot scores from golden vs faulty')
+parser.add_argument('--niter', dest='niter', type=int,
+                    help='number of iterations to read')
 
 def main():
     args = parser.parse_args()
@@ -45,35 +41,29 @@ def main():
     else:
         loc = 'features'
 
+    sdcsOriginalArr = []
+    sdcsPrunedArr  = []
+    sdcsPrunedCompArr = []
+
     if args.perlayer:
-        sdcsTypes = []
-        # dataTypes = ['fp32', 'int16', 'int8']
-        dataTypes = ['int16', 'int8']
+        dataTypes = ['fp32', 'int16', 'int8']
+        # dataTypes = ['fp32']
         for dataType in dataTypes:
             origDataPath = os.path.join(args.origData, dataType)
             prunedDataPath = os.path.join(args.prunedData, dataType)
-            _, sdcsOriginal, acc1sOriginal = loadRecordsLayer(dataType, origDataPath, args.nlayers, args.bit, loc, 'resnet50_')
-            _, sdcsPruned, accs1sPruned = loadRecordsLayer(dataType, prunedDataPath, args.nlayers, args.bit, loc, 'resnet50_pruned_')
-            perLayer(sdcsOriginal, sdcsPruned, 'resnet50_', dataType, loc, args.bit)
-            perLayerBar(sdcsOriginal, sdcsPruned, 'resnet50_', dataType, loc, args.bit)
-            if args.acc:
-                perLayerVsAcc(sdcsOriginal, sdcsPruned, acc1sOriginal, accs1sPruned, 'resnet50_', dataType, loc, args.bit)
-
-    if args.perbit:
-        sdcsTypes = []
-        dataTypes = [('fp32', 32), ('int16', 16), ('int8', 8)]
-        for dataType, nbits in dataTypes:
-            dataPath = os.path.join(args.origData, dataType)
-            _, sdcs = loadRecordsBit(dataType, dataPath, args.nlayers, nbits, loc, 'resnet50_')
-            sdcsTypes.append(sdcs)
-        perBit(sdcsTypes, 'resnet50_', args.nlayers, loc)
-
-    if args.scores:
-        dataTypes = ['fp32', 'int16', 'int8']
-        for dataType in dataTypes:
-            dataPath = os.path.join(args.origData, dataType)
-            correctGolden, correctFaulty, target = loadRecordsCorrect(dataType, dataPath, args.nlayers, args.bit, loc, 'resnet50_')
-            goldenFaultyScores(correctGolden, correctFaulty, target, 'resnet50_', dataType, loc, args.nlayers, args.bit)
+            prunedCompDataPath = os.path.join(args.prunedCompData, dataType)
+            _, sdcsOriginal, acc1sOriginal = loadRecordsLayerAvg(dataType, origDataPath, args.nlayers, 'random', loc, args.niter, 'resnet50_')
+            _, sdcsPruned, accs1sPruned = loadRecordsLayerAvg(dataType, prunedDataPath, args.nlayers, 'random', loc, args.niter, 'resnet50_pruned_')
+            _, sdcsPrunedComp, accs1sPrunedNew = loadRecordsLayerAvg(dataType, prunedCompDataPath, args.nlayers, 'random', loc, args.niter, 'resnet50_pruned_')
+            # perLayer(sdcsOriginal, sdcsPruned, 'resnet50_', dataType, loc, 'random')
+            # perLayerSameFig(sdcsOriginal, sdcsPruned, sdcsPrunedComp, 'resnet50_', dataType, loc, 'random')
+            # perLayerBar(sdcsOriginal, sdcsPruned, 'resnet50_', dataType, loc, 'random')
+            # if args.acc:
+            #     perLayerVsAcc(sdcsOriginal, sdcsPruned, acc1sOriginal, accs1sPruned, 'resnet50_', dataType, loc, 'random')
+            sdcsOriginalArr.append(sdcsOriginal)
+            sdcsPrunedArr.append(sdcsPruned)
+            sdcsPrunedCompArr.append(sdcsPrunedComp)
+        perLayerSameFigFull(sdcsOriginalArr, sdcsPrunedArr, sdcsPrunedCompArr, 'resnet50_', loc, 'random')
 
 
 def perLayer(sdcsOriginal, sdcsPruned, fname, dataType, loc, bit):
@@ -102,6 +92,50 @@ def perLayer(sdcsOriginal, sdcsPruned, fname, dataType, loc, bit):
     fig.savefig(fname + dataType + '_sdcs_bit_' + str(bit) + '_loc_' + loc + '_layer.eps', dpi = 300, bbox_inches='tight', format='eps')
 
 
+def perLayerSameFig(sdcsOriginal, sdcsPruned, sdcsPrunedComp, fname, dataType, loc, bit):
+    cmap = plt.get_cmap('tab10')
+
+    x_pos = np.arange(len(sdcsOriginal))
+
+    fig, axarr = plt.subplots(1, figsize=(10,8))
+    
+    axarr.plot(x_pos, sdcsOriginal, '--', c=cmap(0), label=dataType + ' original')
+    axarr.plot(x_pos, sdcsPruned, '--', c=cmap(1), label=dataType + ' pruned (100% faults)')
+    axarr.plot(x_pos, sdcsPrunedComp, '--', c=cmap(2), label=dataType + ' pruned (20% faults)')
+    axarr.grid(True, linestyle='dotted')
+    axarr.set_ylabel('SDC Probability')
+    axarr.set_xlabel('Layers')
+
+    # axarr[0].legend(loc='upper right', frameon=False)
+    axarr.legend(loc='upper center', bbox_to_anchor=(0., 1.10, 1., .102), ncol=1)
+
+    fig.savefig(fname + dataType + '_sdcs_bit_' + str(bit) + '_loc_' + loc + '_layer_sameFig.eps', dpi = 300, bbox_inches='tight', format='eps')
+
+
+def perLayerSameFigFull(sdcsOriginal, sdcsPruned, sdcsPrunedComp, fname, loc, bit):
+    cmap = plt.get_cmap('tab10')
+    color = 0
+
+
+    fig, axarr = plt.subplots(1, figsize=(10,8))
+    
+    for orig, pruned, pronedComp, dataType in zip(sdcsOriginal, sdcsPruned, sdcsPrunedComp, ['fp32', 'int16', 'int8']):
+        x_pos = np.arange(len(orig))
+        axarr.plot(x_pos, orig, '--', c=cmap(color), label=dataType + ' original')
+        axarr.plot(x_pos, pruned, '--', c=cmap(color + 1), label=dataType + ' pruned (100% faults)')
+        axarr.plot(x_pos, pronedComp, '--', c=cmap(color + 2), label=dataType + ' pruned (20% faults)')
+        color += 3
+
+    axarr.grid(True, linestyle='dotted')
+    axarr.set_ylabel('% Error')
+    axarr.set_xlabel('Layers')
+
+    # axarr[0].legend(loc='upper right', frameon=False)
+    axarr.legend(loc='upper center', bbox_to_anchor=(0., 1.10, 1., .102), ncol=3)
+
+    fig.savefig(fname + 'full_sdcs_bit_' + str(bit) + '_loc_' + loc + '_layer_sameFigFull.eps', dpi = 300, bbox_inches='tight', format='eps')
+
+
 def perLayerBar(sdcsOriginal, sdcsPruned, fname, dataType, loc, bit):
     cmap = plt.get_cmap('tab10')
 
@@ -125,22 +159,6 @@ def perLayerBar(sdcsOriginal, sdcsPruned, fname, dataType, loc, bit):
 
     fig.savefig(fname + dataType + '_sdcs_bit_' + str(bit) + '_loc_' + loc + '_layer_bar.eps', dpi = 300, bbox_inches='tight', format='eps')
 
-
-def perBit(sdcs, fname, layer, loc):
-    cmap = plt.get_cmap('tab10')
-
-    fig, axarr = plt.subplots(3, figsize=(10,8), sharex=True)
-    # fig.suptitle('SDCs Probabilities by Bit Position')
-    dtypes = ['fp32', 'int16', 'int8']
-
-    for idx, dataType in enumerate(dtypes):
-        x_pos = np.arange(len(sdcs[idx]))
-        axarr[idx].bar(x_pos, sdcs[idx], align='center', color=cmap(idx + 3), label=dataType)
-        axarr[idx].legend(loc='upper right', frameon=False)
-        axarr[idx].set_ylabel('SDC Probability')
-
-    axarr[2].set_xlabel('Bit Position')
-    fig.savefig(fname + 'sdcs_layer_' + str(layer) + '_loc_' + loc + '_bit.eps', dpi = 300, bbox_inches='tight', format='eps')
 
 
 def perLayerVsAcc(sdcsOriginal, sdcsPruned, acc1sOriginal, accs1sPruned, fname, dataType, loc, bit):
@@ -168,30 +186,6 @@ def perLayerVsAcc(sdcsOriginal, sdcsPruned, acc1sOriginal, accs1sPruned, fname, 
 
     fig.savefig(fname + dataType + '_sdcs_vs_acc_bit_' + str(bit) + '_loc_' + loc + '_layer.eps', dpi = 300, bbox_inches='tight', format='eps')
 
-
-def goldenFaultyScores(correctGolden, correctFaulty, target, fname, dataType, loc, layer, bit):
-    cmap = plt.get_cmap('tab10')
-
-    x_pos = np.arange(len(correctGolden))
-
-    fig, axarr = plt.subplots(2, figsize=(10,8), sharex=True, sharey=True)
-    
-    axarr[0].scatter(x_pos, correctGolden, s=5, color=cmap(0), alpha=0.5, label=dataType + ' - ' + 'golden')
-    axarr[0].plot(x_pos, target, '--', c=cmap(7), label='Correct')
-    axarr[0].grid(True, linestyle='dotted')
-    axarr[0].set_ylabel('Predicted Label')
-
-
-    axarr[1].scatter(x_pos, correctFaulty, s=5, color=cmap(3), alpha=0.5, label=dataType + ' - ' + 'faulty')
-    axarr[1].plot(x_pos, target, '--', c=cmap(7), label='Correct')
-    axarr[1].grid(True, linestyle='dotted')
-    axarr[1].set_ylabel('Predicted Label')
-    axarr[1].set_xlabel('Inference Round')
-    
-    axarr[0].legend(loc='upper center', bbox_to_anchor=(0., 1.10, 1., .102), ncol=2)
-    axarr[1].legend(loc='upper center', bbox_to_anchor=(0., 1.10, 1., .102), ncol=2)
-
-    fig.savefig(fname + dataType + '_scores_layer_' + str(layer) + '_bit_' + str(bit) + '_loc_' + loc + '_bar.eps', dpi = 200, bbox_inches='tight', format='eps')
 
 
 if __name__ == "__main__":
