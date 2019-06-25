@@ -205,3 +205,127 @@ def getTopFaulty(adjacency):
                 col = j
 
     return row, col, topFaulty
+
+
+
+class Record(object):
+
+        def __init__(self, model, batch_size, fiLayer, fiFeatures, fiWeights, quant_bfeats, quant_bwts, quant_baccum, 
+                        injection=None, quantization=None):
+                """Record constructor
+                        
+                Args:
+                        model (String): Name of the model in torchvision
+                        
+                        fiFeatures (bool): If True, faults can be applied on input features
+
+                        fiWeights (bool): If True, faults can be applied on weights
+
+                        fiFeatures and fiWeights == False: Faults are applied randomly on input features and weighs
+                        
+                        fiFeatures (1d ndarray): array of integers with bit flipped position of each batch
+                        
+                        fiBit (1d ndarray): array of integers with bit flipped position of each batch
+                        
+                        originalValue (1d ndarray): array of floats with value before injection of each batch
+                        
+                        fiValue (1d ndarray): array of floats with value after injection of each batch
+                        
+                        fiLocation (tuple of ints): typle indicating location of fault injection
+                        e.g.: (filter, row, column)
+
+                        quantization (tuple with # bits for (feat, wts, acc)): If not None, quantization 
+                        was applied with #bits for features, weights and accumulator
+
+                        quant_bfeats (integer): number of bits for input features during quantization
+                        
+                        quant_bwts (integer): number of bits for weights during quantization
+                        
+                        quant_baccum (integer): number of bits for accumulators during quantization
+                        
+                        scores (2d tensor): array of scores (only top 5 values) of each batch
+
+                        predictions (2d tensor): array of labels predicted (only top 5 labels) of each batch
+                        
+                        targets (2d tensor): array of targets list of each batch. Each target list contains 
+                        an integer and float that represents correct label and obtained accuracy respectively.
+                """
+
+                self.model = model
+                self.batch_size = batch_size
+
+                self.injection = injection
+                self.fiLayer = fiLayer
+                self.fiFeatures = fiFeatures
+                self.fiWeights = fiWeights
+                # self.fiBit = []
+                # self.originalValue = []
+                # self.fiValue = []
+                # self.fiLocation = [] 
+
+                self.quantization = quantization
+                self.quant_bfeats = quant_bfeats
+                self.quant_bwts = quant_bwts
+                self.quant_baccum = quant_baccum
+
+                self.scores = []
+                self.predictions = []
+                self.targets = []
+                self.targetsGoldenFaulty = []
+                self.acc1 = 0
+                self.acc5 = 0
+
+        def addScores(self, tensors):
+                self.scores.append(tensors.cpu())
+    
+        def addPredictions(self, tensors):
+                self.predictions.append(tensors.cpu())
+
+        def addTargets(self, arr):
+                for val in arr:
+                        self.targets.append(val)
+            
+        def addTargetsGoldenFaulty(self, arr):
+                for val in arr:
+                        self.targetsGoldenFaulty.append(val)
+
+        def addFiBit(self, bit):
+                pass
+                # self.fiBit.append(bit)
+
+        def addOriginalValue(self, value):
+                pass
+                # self.originalValue.append(value)
+
+        def addFiValue(self, value):
+                pass
+                # self.fiValue.append(value)
+
+        def addFiLocation(self, loc):
+                pass
+                # self.fiLocation.append(loc)
+
+        def setAccuracies(self, acc1, acc5):
+                self.acc1 = acc1
+                self.acc5 = acc5
+
+        def getTargetLabels(self):
+                ret = np.zeros(len(self.targets))
+                for i, target in enumerate(self.targets):
+                        ret[i] = target[0]
+                return ret
+
+        def getTop1PredictionLabels(self):
+                ret = np.zeros(len(self.predictions))
+                for i, pred in enumerate(self.predictions):
+                        ret[i] = pred[0]
+                return ret
+
+        def getTop1PredictionLabelsBatch(self):
+                ret = np.zeros(len(self.predictions) * len(self.predictions[0][0]))
+                i = 0
+                for batch in self.predictions:
+                        for pred in batch[0]:
+                                ret[i] = pred
+                                i += 1
+                return ret

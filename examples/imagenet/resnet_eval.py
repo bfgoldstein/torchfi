@@ -5,6 +5,7 @@ import shutil
 import time
 import warnings
 import sys
+import math
 
 import numpy as np
 
@@ -24,7 +25,9 @@ import torchvision.models as models
 
 import torchFI as tfi
 from torchFI.injection import FI
-from util.log import logConfig, Record
+from util.log import logConfig
+from util.record import *
+from util.tensor import *
 
 # import ptvsd
 
@@ -126,6 +129,14 @@ parser.add_argument('--quant-channel', dest='quant_channel', action='store_true'
 ##  Pruning Flags
 #####
 
+parser.add_argument('--pruned', dest='pruned', action='store_true',
+                    help='use pruned model')
+
+parser.add_argument('--pruned_file', metavar='DIR',
+                    help='path to pruned checkpoint')
+
+parser.add_argument('--goldenPred_file', metavar='DIR',
+                    help='path to goldenPred_file')
 
 parser.add_argument('-l', '--log', dest='log', action='store_true',
                     help='turn loging on')
@@ -179,6 +190,10 @@ def main_gpu_worker(gpu, ngpus_per_node, args):
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
         model = models.__dict__[args.arch](pretrained=True)
+        if args.pruned:
+            checkpoint = torch.load(args.pruned_file)
+            state_dict = checkpoint['state_dict']
+            loadStateDictModel(model, state_dict)
     else:
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
@@ -236,6 +251,10 @@ def main_cpu_worker(args):
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
         model = models.__dict__[args.arch](pretrained=True)
+        if args.pruned:
+            checkpoint = torch.load(args.pruned_file)
+            state_dict = checkpoint['state_dict']
+            loadStateDictModel(model, state_dict)
     else:
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
@@ -294,10 +313,19 @@ def validate(val_loader, model, criterion, args):
         logConfig("\t weights ", "{}".format(args.fiWeights))
         if not(args.fiFeats ^ args.fiWeights): 
             logConfig(" ", "Setting random mode.")
+    logConfig("pruned", "{}".format(args.pruned))
+    if args.pruned:
+        logConfig("checkpoint from ", "{}".format(args.pruned_file))
     logConfig("batch size", "{}".format(args.batch_size))
     
     # switch to evaluate mode
     model.eval()
+
+    if args.pruned:
+        _, _, sparsity = countZeroWeights(model)
+        logConfig("sparsity", "{}".format(sparsity))
+        numBatchFault = math.ceil(len(val_loader) * (1 - sparsity))
+        batchFault  = np.random.choice(len(val_loader), numBatchFault, replace=False)
 
     traverse_time = AverageMeter()
     end = time.time()
@@ -351,7 +379,7 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateGoldenBatchPred(predictions)
                 sdcs.updateGoldenBatchScore(scores)
 
-                # record.addScores(scores)
+                record.addScores(scores)
                 record.addPredictions(predictions)
                 record.addTargets(correctPred(output, target))
 
@@ -384,7 +412,16 @@ def validate(val_loader, model, criterion, args):
         with torch.no_grad():
             end = time.time()
 
+            if args.goldenPred_file:
+                targetGoldenPred = loadGoldenPred(args.goldenPred_file)
+            
             for i, (input, target) in enumerate(val_loader):
+                if args.pruned:
+                    if i in batchFault:
+                        fi.injectionMode = True
+                    else:
+                        fi.injectionMode = False
+                        
                 if args.gpu is not None:
                     input = input.cuda(args.gpu, non_blocking=True)
                     target = target.cuda(args.gpu, non_blocking=True)
@@ -403,9 +440,14 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateFaultyBatchPred(predictions)
                 sdcs.updateFaultyBatchScore(scores)
 
-                # record.addScores(scores)
+                record.addScores(scores)
                 record.addPredictions(predictions)
                 record.addTargets(correctPred(output, target))
+                chunk_start = i * args.batch_size
+                chunk_end = (i + 1) * args.batch_size
+                
+                if args.goldenPred_file:
+                    record.addTargetsGoldenFaulty(correctPred(output, targetGoldenPred[chunk_start:chunk_end]))
                 
                 # measure elapsed time
                 batch_time.update(time.time() - end)
@@ -605,6 +647,21 @@ def saveRecord(fidPrefixName, record):
         pickle.dump(record, outFID)
 
 
+def loadGoldenPred(fidPrefixName):
+    import pickle
+    fname = fidPrefixName + '_goldenPred.pkl'
+    with open(fname, 'rb') as inFID:
+        goldenPred = pickle.load(inFID)
+        return goldenPred
 
+def loadStateDictModel(model, state_dict):
+    from collections import OrderedDict
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:] # remove `module.`
+        new_state_dict[name] = v
+    # load params
+    model.load_state_dict(new_state_dict)
+            
 if __name__ == '__main__':
     main()
