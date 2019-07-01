@@ -6,7 +6,6 @@ PROJECT=$3
 DATASET_PATH=$4
 FLAGS=$5
 
-FLAGS="-a resnet50 -e --pretrained --injection --layer=0 -b 256"
 
 . /export/software/anaconda2/etc/profile.d/conda.sh
 conda activate ${PROJECT}
@@ -16,9 +15,16 @@ export PYTHONPATH=$PYTHONPATH:${HOME}/${PROJECT}
 
 echo ${PYTHONPATH}
 
-echo "cd ${EXP_PATH}"
-cd ${EXP_PATH}
+echo "cd ${HOME}/${PROJECT}"
+cd ${HOME}/${PROJECT}
 
-echo "python3 ${EXP_RUN} ${FLAGS} ${DATASET_PATH}"
+NUM_CORES=8
+export MKL_NUM_THREADS=$NUM_CORES
+export OMP_NUM_THREADS=$NUM_CORES
 
-python3 ${EXP_RUN} ${FLAGS} ${DATASET_PATH}
+echo "MKL_NUM_THREADS = $MKL_NUM_THREADS"
+echo "OMP_NUM_THREADS = $OMP_NUM_THREADS"
+
+echo "python3 ${EXP_PATH}/${EXP_RUN} ${FLAGS} ${DATASET_PATH}"
+
+python3 ${EXP_PATH}/${EXP_RUN} ${FLAGS} ${DATASET_PATH}
