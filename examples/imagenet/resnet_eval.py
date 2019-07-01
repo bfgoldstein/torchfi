@@ -49,8 +49,8 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     help='model architecture: ' +
                         ' | '.join(model_names) +
                         ' (default: resnet18)')
-parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
-                    help='number of data loading workers (default: 4)')
+parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
+                    help='number of data loading workers (default: 8)')
 
 parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N',
@@ -131,6 +131,9 @@ parser.add_argument('--quant-channel', dest='quant_channel', action='store_true'
 
 parser.add_argument('--pruned', dest='pruned', action='store_true',
                     help='use pruned model')
+
+parser.add_argument('--prune_compensate', dest='prune_compensate', action='store_true',
+                    help='apply an % of faults relative to the amount of weights after prunning')
 
 parser.add_argument('--pruned_file', metavar='DIR',
                     help='path to pruned checkpoint')
@@ -252,7 +255,7 @@ def main_cpu_worker(args):
         print("=> using pre-trained model '{}'".format(args.arch))
         model = models.__dict__[args.arch](pretrained=True)
         if args.pruned:
-            checkpoint = torch.load(args.pruned_file)
+            checkpoint = torch.load(args.pruned_file, map_location='cpu')
             state_dict = checkpoint['state_dict']
             loadStateDictModel(model, state_dict)
     else:
@@ -314,6 +317,7 @@ def validate(val_loader, model, criterion, args):
         if not(args.fiFeats ^ args.fiWeights): 
             logConfig(" ", "Setting random mode.")
     logConfig("pruned", "{}".format(args.pruned))
+    logConfig("prune compensate", "{}".format(args.prune_compensate))
     if args.pruned:
         logConfig("checkpoint from ", "{}".format(args.pruned_file))
     logConfig("batch size", "{}".format(args.batch_size))
@@ -416,7 +420,7 @@ def validate(val_loader, model, criterion, args):
                 targetGoldenPred = loadGoldenPred(args.goldenPred_file)
             
             for i, (input, target) in enumerate(val_loader):
-                if args.pruned:
+                if args.pruned and args.prune_compensate:
                     if i in batchFault:
                         fi.injectionMode = True
                     else:
@@ -649,11 +653,14 @@ def saveRecord(fidPrefixName, record):
 
 def loadGoldenPred(fidPrefixName):
     import pickle
-    fname = fidPrefixName + '_goldenPred.pkl'
+    fname = fidPrefixName + '_record.pkl'
     with open(fname, 'rb') as inFID:
-        goldenPred = pickle.load(inFID)
-        return goldenPred
-
+        goldenRecord = pickle.load(inFID)
+    predGolden = torch.cat((goldenRecord.predictions[0][0], goldenRecord.predictions[1][0]))
+    for item in goldenRecord.predictions[2:]:
+        predGolden = torch.cat((predGolden, item[0]))
+    return predGolden
+        
 def loadStateDictModel(model, state_dict):
     from collections import OrderedDict
     new_state_dict = OrderedDict()
