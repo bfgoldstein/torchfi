@@ -371,7 +371,11 @@ def validate(val_loader, model, criterion, args):
                 
                 # compute output
                 output = model(input)
-
+                
+                # normalize output
+                lsm = nn.LogSoftmax(dim = 1)
+                norm_output = torch.exp(lsm(output))
+                
                 # measure accuracy
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
                 top1_golden.update(acc1[0], input.size(0))
@@ -380,10 +384,13 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateGoldenData(output)
 
                 scores, predictions = topN(output, target, topk=(1,5))
+                norm_scores, _ = topN(norm_output, target, topk=(1,5))
+                
                 sdcs.updateGoldenBatchPred(predictions)
                 sdcs.updateGoldenBatchScore(scores)
-
-                record.addScores(scores)
+                
+                # record.addScores(scores)
+                record.addScores(norm_scores)
                 record.addPredictions(predictions)
                 record.addTargets(correctPred(output, target))
 
@@ -432,7 +439,11 @@ def validate(val_loader, model, criterion, args):
 
                 # compute output
                 output = model(input)
-
+                
+                # normalize output
+                lsm = nn.LogSoftmax(dim = 1)
+                norm_output = torch.exp(lsm(output))
+                
                 # measure accuracy
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
                 top1_faulty.update(acc1[0], input.size(0))
@@ -441,10 +452,13 @@ def validate(val_loader, model, criterion, args):
                 sdcs.updateFaultyData(output)
 
                 scores, predictions = topN(output, target, topk=(1,5))
+                norm_scores, _ = topN(norm_output, target, topk=(1,5))
+
                 sdcs.updateFaultyBatchPred(predictions)
                 sdcs.updateFaultyBatchScore(scores)
 
-                record.addScores(scores)
+                # record.addScores(scores)
+                record.addScores(norm_scores)
                 record.addPredictions(predictions)
                 record.addTargets(correctPred(output, target))
                 chunk_start = i * args.batch_size
