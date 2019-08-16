@@ -13,7 +13,7 @@ from util import *
 
 class FI(object):
 
-    def __init__(self, model, record, fiMode=False, fiBit=None, fiLayer=0, fiFeatures=True, fiWeights=True, 
+    def __init__(self, model, record=None, fiMode=False, fiBit=None, fiepoch=None, fiLayer=0, fiFeatures=True, fiWeights=True, 
                 quantMode=False, quantType=LinearQuantMode.SYMMETRIC, quantBitFeats=8, quantBitWts=8, 
                 quantBitAccum=32, quantClip=False, quantChannel=False, log=False):
         self.model = model
@@ -34,6 +34,7 @@ class FI(object):
         self.injectionFeatures = fiFeatures
         self.injectionWeights = fiWeights
         self.numNewLayers = -1
+        self.epoch = fiepoch
 
     def traverseModel(self, model):
         for layerName, layerObj in model.named_children():
@@ -64,7 +65,7 @@ class FI(object):
             if layerType == nn.Conv2d:
                 self.numNewLayers += 1
                 return FIConv2d(self, self.numNewLayers, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
-                            layerObj.kernel_size, layerObj.stride, layerObj.padding, layerObj.dilation, layerObj.groups, layerObj.bias)
+                            layerObj.kernel_size, layerObj.stride, layerObj.padding, layerObj.dilation, layerObj.groups, layerObj.bias, layerObj.bias is not None)
             elif layerType == nn.Linear:
                 self.numNewLayers += 1
                 return FILinear(self, self.numNewLayers, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, layerObj.out_features)

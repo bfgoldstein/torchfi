@@ -8,14 +8,15 @@ from util.log import *
 class FIConv2d(nn.Conv2d):
    
     def __init__(self, fi, id, name, weight, in_channels, out_channels, kernel_size, stride=1, padding=0, 
-                dilation=1, groups=1, bias=True):
+                dilation=1, groups=1, bias=None, b=False):
         super(FIConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, 
-            groups, bias)
+            groups, b)
         
         self.fi = fi
         self.id = id
         self.name = name
         self.weight = weight
+        self.bias = bias
 
     def forward(self, input):
         if self.fi.injectionMode and self.id == self.fi.injectionLayer:
