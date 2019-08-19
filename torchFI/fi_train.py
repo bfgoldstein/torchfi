@@ -142,9 +142,7 @@ def fi_train(args, dataset_name, model, optimizer, fi_model, fi_optimizer, crite
         writer = SummaryWriter(log_dir=args.log_path + '/tensorboard_runs/' + args.log_prefix)
     else:
         writer = SummaryWriter()
-    
-   
-    
+       
     ##### Fault Injection #########
     batchFault = np.random.choice(math.floor(len(train_loader) / args.batch_size), 1, replace=False)
  
@@ -212,24 +210,28 @@ def fi_train(args, dataset_name, model, optimizer, fi_model, fi_optimizer, crite
             
             for tag, value in fi_model.named_parameters():
                 tag = tag.replace('.', '/')                                         
-                writer.add_histogram(tag, value.data.cpu().numpy(), epoch)
-                writer.add_histogram(tag + '/grad', value.grad.data.cpu().numpy(), epoch)
+                writer.add_histogram(args.log_prefix + '/' + tag, value.data.cpu().numpy(), epoch)
+                writer.add_histogram(args.log_prefix + '/' + tag + '/grad', value.grad.data.cpu().numpy(), epoch)
         
         if args.record_prefix is not None:
             saveRecord(args.record_prefix + getRecordPrefix(args, 'fp32', faulty=True), record)
 
-    for i in range(0, args.epochs):
-        writer.add_scalars('Loss/train', { 'golden' : train_losses[i], 
-                                          'faulty' : fi_train_losses[i]}, i + 1)
-        writer.add_scalars('Loss/test', { 'golden' : test_losses[i], 
-                                         'faulty' : fi_test_losses[i]}, i + 1)
-        writer.add_scalars('Accuracy/train', { 'golden' : train_accs[i], 
-                                              'faulty' : fi_train_accs[i]}, i + 1)
-        writer.add_scalars('Accuracy/test', { 'golden' : test_accs[i], 
-                                             'faulty' : fi_test_accs[i]}, i + 1)
+    ##
+    # Tensorboard log and plot are generated only during golden + faulty runs 
+    ##
+    if args.golden and args.faulty:
+        for i in range(0, args.epochs):
+            writer.add_scalars(args.log_prefix + '/' + 'Loss/train', { 'golden' : train_losses[i], 
+                                            'faulty' : fi_train_losses[i]}, i + 1)
+            writer.add_scalars(args.log_prefix + '/' + 'Loss/test', { 'golden' : test_losses[i], 
+                                            'faulty' : fi_test_losses[i]}, i + 1)
+            writer.add_scalars(args.log_prefix + '/' + 'Accuracy/train', { 'golden' : train_accs[i], 
+                                                'faulty' : fi_train_accs[i]}, i + 1)
+            writer.add_scalars(args.log_prefix + '/' + 'Accuracy/test', { 'golden' : test_accs[i], 
+                                                'faulty' : fi_test_accs[i]}, i + 1)
         
-    if args.plot is not None:
-        plot_losses(args.plot, train_losses, fi_train_losses, test_losses, fi_test_losses)
+        if args.plot is not None:
+            plot_losses(args.plot, train_losses, fi_train_losses, test_losses, fi_test_losses)
 
     if args.save_model is not None:
         torch.save(model.state_dict(), args.save_model + ".pt")
