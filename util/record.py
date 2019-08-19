@@ -6,6 +6,24 @@ import pickle
 
 import torch
 
+def getRecordPrefix(args, dataType, faulty=False):
+        if faulty:
+                ret =  dataType + '_faulty' +           \
+                        '_layer_' + str(args.layer) +        \
+                        '_bit_' + str(args.bit) +            \
+                        '_epoch_' + str(args.fiEpoch) +      \
+                        '_weights_' + str(args.fiWeights) +  \
+                        '_features_' + str(args.fiFeats)     
+                return ret
+        else:
+                return dataType + '_golden'
+        
+def saveRecord(fidPrefixName, record):
+        import pickle
+        fname = fidPrefixName + "_record.pkl" 
+        with open(fname, 'wb') as outFID:
+            pickle.dump(record, outFID)
+            
 
 def loadRecordsCorrect(dataType, data, nlayers, bit, loc, experiment):
         prefix = experiment + dataType + '_golden'
@@ -151,7 +169,7 @@ def loadRecord(fidPrefixName):
 
 def getPrefix(experiment, dataType, layer, bit, loc, iter=1):
         fidPrefixName = experiment + dataType + '_'
-        fidPrefixName += 'layer_' + str(layer) + '_' 
+        fidPrefixName += 'layer_' + str(layer) + '_'
         fidPrefixName += 'bit_' + str(bit) + '_' 
         fidPrefixName += 'loc_' + loc + '_' 
         fidPrefixName += 'iter_' + str(iter)
@@ -210,12 +228,16 @@ def getTopFaulty(adjacency):
 
 class Record(object):
 
-        def __init__(self, model, batch_size, fiLayer, fiFeatures, fiWeights, quant_bfeats, quant_bwts, quant_baccum, 
-                        injection=None, quantization=None):
+        def __init__(self, model, batch_size, injection=True, fiLayer=None, fiFeatures=None, fiWeights=None, 
+                     quantization=False, quant_bfeats=None, quant_bwts=None, quant_baccum=None):
                 """Record constructor
                         
-                Args:
-                        model (String): Name of the model in torchvision
+                Attributes:
+                        model (String): name of the model (arch in torchvision)
+                        
+                        batch_size (integer): size batch used during each iteration
+                        
+                        injection (boolean): If True, injection was applied and record represents a faulty run
                         
                         fiFeatures (bool): If True, faults can be applied on input features
 
@@ -234,8 +256,8 @@ class Record(object):
                         fiLocation (tuple of ints): typle indicating location of fault injection
                         e.g.: (filter, row, column)
 
-                        quantization (tuple with # bits for (feat, wts, acc)): If not None, quantization 
-                        was applied with #bits for features, weights and accumulator
+                        quantization (boolean): If True, quantization was applied with quant_bfeats, quant_bwts and quant_baccum bits
+                         for features, weights and accumulator respectively
 
                         quant_bfeats (integer): number of bits for input features during quantization
                         
@@ -248,7 +270,23 @@ class Record(object):
                         predictions (2d tensor): array of labels predicted (only top 5 labels) of each batch
                         
                         targets (2d tensor): array of targets list of each batch. Each target list contains 
-                        an integer and float that represents correct label and obtained accuracy respectively.
+                        an integer and float that represents correct label and obtained accuracy respectively
+                        
+                        targetsGoldenFaulty (2d tensor): array of targets list of each batch. Each target list contains 
+                        an integer and float that represents correct label and obtained accuracy respectively. This list 
+                        differs from "targets" in respect that the correct predicted label is from the Golden run.
+                
+                        acc1 (float): float number representing the final top-1 accuracy of the prediction model
+                        
+                        acc5 (float): float number representing the final top-5 accuracy of the prediction model
+                
+                        train_losses (1d array): array of losses obtained during each epoch of a model during training phase
+                        
+                        train_accs (1d array): array of accuracies obtained during each epoch of a model during training phase 
+                        
+                        test_losses (1d array): array of losses obtained during each epoch of a model during testing phase
+                        
+                        test_accs (1d array): array of accuracies obtained during each epoch of a model during testing phase
                 """
 
                 self.model = model
@@ -258,10 +296,10 @@ class Record(object):
                 self.fiLayer = fiLayer
                 self.fiFeatures = fiFeatures
                 self.fiWeights = fiWeights
-                # self.fiBit = []
-                # self.originalValue = []
-                # self.fiValue = []
-                # self.fiLocation = [] 
+                self.fiBit = []
+                self.originalValue = []
+                self.fiValue = []
+                self.fiLocation = [] 
 
                 self.quantization = quantization
                 self.quant_bfeats = quant_bfeats
@@ -274,6 +312,13 @@ class Record(object):
                 self.targetsGoldenFaulty = []
                 self.acc1 = 0
                 self.acc5 = 0
+
+                # Training data
+                self.train_losses = []
+                self.train_accs = []
+                self.test_losses = []
+                self.test_accs = []
+                
 
         def addScores(self, tensors):
                 self.scores.append(tensors.cpu())
@@ -290,25 +335,37 @@ class Record(object):
                         self.targetsGoldenFaulty.append(val)
 
         def addFiBit(self, bit):
-                pass
-                # self.fiBit.append(bit)
+                # pass
+                self.fiBit.append(bit)
 
         def addOriginalValue(self, value):
-                pass
-                # self.originalValue.append(value)
+                # pass
+                self.originalValue.append(value)
 
         def addFiValue(self, value):
-                pass
-                # self.fiValue.append(value)
+                # pass
+                self.fiValue.append(value)
 
         def addFiLocation(self, loc):
-                pass
-                # self.fiLocation.append(loc)
+                # pass
+                self.fiLocation.append(loc)
 
         def setAccuracies(self, acc1, acc5):
                 self.acc1 = acc1
                 self.acc5 = acc5
 
+        def addTrainLosses(self, losses):
+                self.train_losses += losses
+                
+        def addTrainAccs(self, accs):
+                self.train_accs += accs
+        
+        def addTestLosses(self, losses):
+                self.test_losses += losses
+        
+        def addTestAccs(self, accs):
+                self.test_accs += accs
+                
         def getTargetLabels(self):
                 ret = np.zeros(len(self.targets))
                 for i, target in enumerate(self.targets):
