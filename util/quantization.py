@@ -26,7 +26,8 @@ import torch
 
 def _prep_saturation_val_tensor(sat_val):
     is_scalar = not isinstance(sat_val, torch.Tensor)
-    out = torch.tensor(sat_val)
+    # out = torch.tensor(sat_val)
+    out = torch.tensor(sat_val) if is_scalar else sat_val.clone().detach()
     if not out.is_floating_point():
         out = out.to(torch.float32)
     if out.dim() == 0:
@@ -120,7 +121,7 @@ def linear_dequantize(input, scale, zero_point, inplace=False):
 def get_tensor_min_max(t, per_dim=None):
     if per_dim is None:
         return t.min(), t.max()
-    if per_dim > t.dim():
+    if per_dim >= t.dim():
         raise ValueError('Got per_dim={0}, but tensor only has {1} dimensions', per_dim, t.dim())
     view_dims = [t.shape[i] for i in range(per_dim + 1)] + [-1]
     tv = t.view(*view_dims)

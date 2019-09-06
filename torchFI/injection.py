@@ -2,20 +2,23 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
+from functools import reduce
+from operator import getitem
 import numpy as np
 
-from .finodes import *
-from .quantnodes import *
+import distiller.modules as dist
+
+from .modules import *
 from .bitflip import *
-from util.log import *
 from util import *
 
 
 class FI(object):
 
-    def __init__(self, model, record=None, fiMode=False, fiBit=None, fiepoch=None, fiLayer=0, fiFeatures=True, fiWeights=True, 
-                quantMode=False, quantType=LinearQuantMode.SYMMETRIC, quantBitFeats=8, quantBitWts=8, 
-                quantBitAccum=32, quantClip=False, quantChannel=False, log=False):
+    def __init__(self, model, record=None, fiMode=False, fiBit=None, fiepoch=None, fiLayer=0, 
+                 fiFeatures=True, fiWeights=True, quantMode=False, quantType=LinearQuantMode.SYMMETRIC, 
+                 quantBitFeats=8, quantBitWts=8, quantBitAccum=32, quantClip=False, quantChannel=False, 
+                 log=False):
         self.model = model
         self.record = record
         self.log = log
@@ -23,7 +26,7 @@ class FI(object):
         self.quantizationMode = quantMode
         self.quantizationType = LinearQuantMode[quantType]
         self.quantizationBitWeights = quantBitWts
-        self.quantizationBitParams = quantBitFeats
+        self.quantizationBitFeatures = quantBitFeats
         self.quantizationBitAccum = quantBitAccum
         self.quantizationClip = quantClip
         self.quantizationChannel = quantChannel
@@ -36,233 +39,60 @@ class FI(object):
         self.numNewLayers = -1
         self.epoch = fiepoch
 
+        self.numInjections = 0
+        
+        self.factory = {}
+        self.fillFacotry()
+        self.layersIds = []
+        
     def traverseModel(self, model):
         for layerName, layerObj in model.named_children():
             newLayer = self.replaceLayer(layerObj, type(layerObj), layerName)
             setattr(model, layerName, newLayer)
             
+            # For block layers we call recursively
             if self.has_children(layerObj):
-                # For block layers we call recursively
                 self.traverseModel(layerObj)
 
     def replaceLayer(self, layerObj, layerType, layerName):
-        if self.quantizationMode:    
-            if layerType == nn.Conv2d:
-                self.numNewLayers += 1
-                return QConv2d(self, self.numNewLayers, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
-                            layerObj.kernel_size, layerObj.stride, layerObj.padding, layerObj.dilation, layerObj.groups, layerObj.bias, 
-                            self.quantizationBitWeights, self.quantizationBitParams, self.quantizationBitAccum, self.quantizationType,
-                            self.quantizationClip, self.quantizationChannel)
-            elif layerType == nn.Linear:
-                self.numNewLayers += 1
-                return QLinear(self, self.numNewLayers, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, layerObj.out_features, 
-                            self.quantizationBitWeights, self.quantizationBitParams, self.quantizationBitAccum, self.quantizationType,
-                            self.quantizationClip, self.quantizationChannel)
-            else:
-                return layerObj
+        if self.injectionMode:
+            if layerType in self.factory:
+                return self.factory[layerType].from_pytorch_impl(self, layerName, layerObj)
+        return layerObj
 
-        elif self.injectionMode:
-            if layerType == nn.Conv2d:
-                self.numNewLayers += 1
-                return FIConv2d(self, self.numNewLayers, layerName, layerObj.weight, layerObj.in_channels, layerObj.out_channels,
-                            layerObj.kernel_size, layerObj.stride, layerObj.padding, layerObj.dilation, layerObj.groups, layerObj.bias, layerObj.bias is not None)
-            elif layerType == nn.Linear:
-                self.numNewLayers += 1
-                return FILinear(self, self.numNewLayers, layerName, layerObj.weight, layerObj.bias, layerObj.in_features, layerObj.out_features)
-            else:
-                return layerObj
-        else:
-            return layerObj
-
-    def injectFeatures(self, tensorData, tensorShape):
+    def injectFeatures(self, tensorData, batchSize):
         faulty_res = []
-
-        if len(tensorShape) == 1:
-            feature_size = tensorShape
-            fault_idx = np.random.randint(0, feature_size)
-            
-            while tensorData[fault_idx] == 0.0:
-                fault_idx = np.random.randint(0, feature_size)
-
-            if self.log:
-                logInjectionNode("Node index:", [fault_idx])
-
-            faulty_val, bit = bitFlip(tensorData[fault_idx], size=self.quantizationBitParams, 
-                        bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
-
-            faulty_res.append((fault_idx, faulty_val))
-
-            self.recordData(bit, tensorData[fault_idx], faulty_val, (0, fault_idx))
-
-            return faulty_res
-
-        elif len(tensorShape) == 2:
-            batches_size, feat_size = tensorShape
-
-            for batch_idx in range(0, batches_size):
-                feat_idx = np.random.randint(0, feat_size)
-
-                while tensorData[batch_idx][feat_idx] == 0.0:
-                    feat_idx = np.random.randint(0, feat_size)
-
-                if self.log:
-                    logInjectionNode("Node index:", [batch_idx, feat_idx])
-
-                faulty_val, bit = bitFlip(tensorData[batch_idx][feat_idx], size=self.quantizationBitParams, 
-                            bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
         
-                faulty_res.append((feat_idx, faulty_val))
-
-                self.recordData(bit, tensorData[batch_idx][feat_idx],
-                                 faulty_val, (0, batch_idx, feat_idx))
-
-            return faulty_res
-
-        elif len(tensorShape) == 3:
-            batches_size, channels_size, feat_size = tensorShape
-
-            for batch_idx in range(0, batches_size):
-                channel_idx = np.random.randint(0, channels_size)
-                feat_idx = np.random.randint(0, feat_size)
-
-                while tensorData[batch_idx][channel_idx][feat_idx] == 0.0:
-                    channel_idx = np.random.randint(0, channels_size)
-                    feat_idx = np.random.randint(0, feat_size)
-
-                if self.log:
-                    logInjectionNode("Node index:", [batch_idx, channel_idx, feat_idx])
-
-                faulty_val, bit = bitFlip(tensorData[batch_idx][channel_idx][feat_idx], size=self.quantizationBitParams, 
-                            bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
+        for batch_idx in range(0, batchSize):
+            indices, faulty_val = self.inject(tensorData)
+            faulty_res.append(([batch_idx] + indices, faulty_val))
         
-                faulty_res.append((channel_idx, feat_idx, faulty_val))
-
-                self.recordData(bit, tensorData[batch_idx][channel_idx][feat_idx],
-                                 faulty_val, (0, batch_idx, channel_idx, feat_idx))
-
-            return faulty_res
-
-        elif len(tensorShape) == 4:
-            batches_size, channels_size, feat_row_size, feat_col_size = tensorShape
-
-            for batch_idx in range(0, batches_size):
-                channel_idx = np.random.randint(0, channels_size)
-                feat_row_idx = np.random.randint(0, feat_row_size)
-                feat_col_idx = np.random.randint(0, feat_col_size)
-
-                while tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx] == 0.0:
-                    channel_idx = np.random.randint(0, channels_size)
-                    feat_row_idx = np.random.randint(0, feat_row_size)
-                    feat_col_idx = np.random.randint(0, feat_col_size)
-                
-                if self.log:
-                    logInjectionNode("Node index:", [batch_idx, channel_idx, feat_row_idx, feat_col_idx])
-                
-                faulty_val, bit = bitFlip(tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx], size=self.quantizationBitParams, 
-                            bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
-
-                faulty_res.append((channel_idx, feat_row_idx, feat_col_idx, faulty_val))
-
-                self.recordData(bit, tensorData[batch_idx][channel_idx][feat_row_idx][feat_col_idx],
-                                 faulty_val, (0, batch_idx, channel_idx, feat_row_idx, feat_col_idx))
-            
-            return faulty_res
-            
-        else:
-            raise Exception('Injection not implemented for tensor with shape: ' + tensorShape)
-
+        
+        return faulty_res           
 
     def injectWeights(self, tensorData, tensorShape):
+        return self.inject(tensorData)
+    
+    def inject(self, data: torch.Tensor):
 
-        if tensorShape == 1:
-            feature_size = tensorShape
-            fault_idx = np.random.randint(0, feature_size)
+        indices, data_val = getDataFromRandomIndex(data)
+        
+        while data_val == 0.0:
+            indices, data_val = getDataFromRandomIndex(data)
 
-            while tensorData[fault_idx] == 0.0:
-                fault_idx = np.random.randint(0, feature_size)
-            
-            if self.log:
-                logInjectionNode("Node index:", [fault_idx])
+        if self.log:
+            logInjectionNode("Node index:", indices)
 
-            faulty_val, bit = bitFlip(tensorData[fault_idx], size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode)
+        faulty_val, bit = bitFlip(data_val, 
+                                  size=(self.quantizationBitWeights if self.injectionWeights else self.quantizationBitFeatures), 
+                                  bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
+        
+        self.injectionMode = False
+        self.numInjections += 1
+        self.recordData(bit, data_val, faulty_val, indices)
 
-            self.recordData(bit, tensorData[fault_idx],
-                           faulty_val, (1, fault_idx))
-
-            return (fault_idx, faulty_val)
-
-        elif len(tensorShape) == 2:
-            feat_row_size, feat_col_size = tensorShape
-
-            feat_row_idx = np.random.randint(0, feat_row_size)
-            feat_col_idx = np.random.randint(0, feat_col_size)
-
-            while tensorData[feat_row_idx][feat_col_idx] == 0.0:
-                feat_row_idx = np.random.randint(0, feat_row_size)
-                feat_col_idx = np.random.randint(0, feat_col_size)
-
-            if self.log:
-                logInjectionNode("Node index:", [feat_row_idx][feat_col_idx])
-
-            faulty_val, bit = bitFlip(tensorData[feat_row_idx][feat_col_idx], size=self.quantizationBitWeights, bit=self.injectionBit, 
-                        log=self.log, quantized=self.quantizationMode) 
-            
-            self.recordData(bit, tensorData[feat_row_idx][feat_col_idx],
-                             faulty_val, (1, feat_row_idx, feat_col_idx))
-
-            return (feat_row_idx, feat_col_idx, faulty_val)
-
-        elif len(tensorShape) == 3:
-            filters_size, num_channels, feat_size = tensorShape
-
-            filter_idx = np.random.randint(0, filters_size)
-            channel_idx = np.random.randint(0, num_channels)
-            feat_idx = np.random.randint(0, feat_size)
-
-            while tensorData[filter_idx][channel_idx][feat_idx] == 0.0:
-                filter_idx = np.random.randint(0, filters_size)
-                channel_idx = np.random.randint(0, num_channels)
-                feat_idx = np.random.randint(0, feat_size)
-
-            if self.log:
-                logInjectionNode("Node index:", [filter_idx, channel_idx, feat_idx])
-
-            faulty_val, bit = bitFlip(tensorData[filter_idx][channel_idx][feat_idx], size=self.quantizationBitWeights, bit=self.injectionBit, 
-                        log=self.log, quantized=self.quantizationMode) 
-            
-            self.recordData(bit, tensorData[filter_idx][channel_idx][feat_idx],
-                             faulty_val, (1, filter_idx, channel_idx, feat_idx))
-
-            return (filter_idx, channel_idx, feat_idx, faulty_val)
-
-        elif len(tensorShape) == 4:
-            filters_size, channels_size, feat_row_size, feat_col_size = tensorShape
-
-            filter_idx = np.random.randint(0, filters_size)
-            channel_idx = np.random.randint(0, channels_size)
-            feat_row_idx = np.random.randint(0, feat_row_size)
-            feat_col_idx = np.random.randint(0, feat_col_size)
-
-            while tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx] == 0.0:
-                filter_idx = np.random.randint(0, filters_size)
-                channel_idx = np.random.randint(0, channels_size)
-                feat_row_idx = np.random.randint(0, feat_row_size)
-                feat_col_idx = np.random.randint(0, feat_col_size)
-
-            if self.log:
-                logInjectionNode("Node index:", [filter_idx, channel_idx, feat_row_idx, feat_col_idx])
-
-            faulty_val, bit = bitFlip(tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx], 
-                        size=self.quantizationBitWeights, bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
-
-            self.recordData(bit, tensorData[filter_idx][channel_idx][feat_row_idx][feat_col_idx],
-                             faulty_val, (1, filter_idx, channel_idx, feat_row_idx, feat_col_idx))
-
-            return (filter_idx, channel_idx, feat_row_idx, feat_col_idx, faulty_val)
-
-        else:
-            raise Exception('Injection not implemented for tensor with shape: ' + tensorShape)
-
+        return indices, faulty_val
+    
     def setInjectionMode(self, mode):
         if self.log:
             logInjectionWarning("\tSetting injection mode to " + str(mode))
@@ -281,10 +111,42 @@ class FI(object):
             return True
         except StopIteration:
             return False
-
+    
+    def addNewLayer(self, layerName, layerType):
+        self.numNewLayers += 1
+        self.layersIds.append((layerName, layerType))
+        return self.numNewLayers
+    
     def recordData(self, bit, original, faulty, location):
-        pass
-        # self.record.addFiBit(bit)
-        # self.record.addOriginalValue(float(original.cpu()))
-        # self.record.addFiValue(faulty)
-        # self.record.addFiLocation(location)
+        # pass
+        self.record.addFiBit(bit)
+        self.record.addOriginalValue(float(original.cpu()))
+        self.record.addFiValue(faulty)
+        self.record.addFiLocation(location)
+
+    def fillFacotry(self):
+        if self.quantizationMode:
+            self.factory[nn.Conv2d] = QFIConv2d
+            self.factory[nn.Linear] = QFILinear
+        else:
+            self.factory[nn.Conv2d] = FIConv2d
+            self.factory[nn.Linear] = FILinear
+        self.factory[nn.LSTM] = FILSTM
+        self.factory[nn.LSTMCell] = FILSTMCell
+        self.factory[nn.Embedding] = FIEmbedding
+        self.factory[dist.EltwiseAdd] = FIEltwiseAdd
+        self.factory[dist.EltwiseMult] = FIEltwiseMult
+        self.factory[dist.EltwiseDiv] = FIEltwiseDiv
+        self.factory[dist.Matmul] = FIMatmul
+        self.factory[dist.BatchMatmul] = FIBatchMatmul
+        
+
+def getDataFromRandomIndex(data: torch.Tensor):
+    # get item from multidimensional list at indices position 
+    indices = [getRandomIndex(dim_size) for dim_size in data.shape]
+    fiData = reduce(getitem, indices, data)
+    return indices, fiData
+    
+    
+def getRandomIndex(max: int):
+    return np.random.randint(0, max)

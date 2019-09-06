@@ -19,6 +19,7 @@ def flipFloat(val, bit=None, log=False):
 
     return faultValue.float, bit
 
+
 def flipInt(val, size, bit=None, log=False):
     # Cast integer to BitArray and flip (invert) random bit 0-N
     val = int(val)

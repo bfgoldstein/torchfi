@@ -41,7 +41,7 @@ def getParser():
                         help='number of nodes for distributed training')
     parser.add_argument('--rank', default=-1, type=int,
                         help='node rank for distributed training')
-    parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
+    parser.add_argument('--dist-url', default='tcp://1.1.1.1:23456', type=str,
                         help='url used to set up distributed training')
     parser.add_argument('--dist-backend', default='nccl', type=str,
                         help='distributed backend')
@@ -109,6 +109,8 @@ def getParser():
                                  help='turn scores loging on')
     injection_group.add_argument('--record-prefix', dest='record_prefix', default=None, type=str,
                                  help='prefix of record filename')
+    injection_group.add_argument('--iter', default=1, type=int,
+                                 help='Iteration number of FI run.')
 
 
     #####
@@ -147,5 +149,48 @@ def getParser():
                         help='path to pruned checkpoint')
     pruning_group.add_argument('--goldenPred_file', metavar='DIR',
                         help='path to goldenPred_file')
+
+
+    #####
+    ##  GNMT Arguments
+    #####
+
+    gnmt_group = parser.add_argument_group('Arguments for model GNMT model')
+
+    gnmt_group.add_argument('--input', required=True,
+                            help='input file (tokenized)')
+    # Replaced by record-prefix
+    # TODO: Add fixed prefix folder to save GNMT ouput, record, etc
+    # gnmt_group.add_argument('--output', required=True,
+    #                         help='output file (tokenized)')
+    gnmt_group.add_argument('--model', required=True,
+                            help='model checkpoint file')
+    gnmt_group.add_argument('--reference', default=None,
+                            help='full path to the file with reference \
+                            translations (for sacrebleu)')
+
+    gnmt_group.add_argument('--beam-size', default=5, type=int,
+                            help='beam size')
+    gnmt_group.add_argument('--max-seq-len', default=80, type=int,
+                            help='maximum prediciton sequence length')
+    gnmt_group.add_argument('--cov-penalty-factor', default=0.1, type=float,
+                            help='coverage penalty factor')
+    gnmt_group.add_argument('--len-norm-const', default=5.0, type=float,
+                            help='length normalization constant')
+    gnmt_group.add_argument('--len-norm-factor', default=0.6, type=float,
+                            help='length normalization factor')
+
+    batch_first_parser = gnmt_group.add_mutually_exclusive_group(required=False)
+    
+    batch_first_parser.add_argument('--batch-first', dest='batch_first',
+                                    action='store_true',
+                                    help='uses (batch, seq, feature) data \
+                                    format for RNNs')
+    batch_first_parser.add_argument('--seq-first', dest='batch_first',
+                                    action='store_false',
+                                    help='uses (seq, batch, feature) data \
+                                    format for RNNs')
+    batch_first_parser.set_defaults(batch_first=True)
+
 
     return parser

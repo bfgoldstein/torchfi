@@ -6,18 +6,27 @@ import pickle
 
 import torch
 
+        
 def getRecordPrefix(args, dataType, faulty=False):
         if faulty:
                 ret =  dataType + '_faulty' +           \
-                        '_layer_' + str(args.layer) +        \
-                        '_bit_' + str(args.bit) +            \
-                        '_epoch_' + str(args.fiEpoch) +      \
-                        '_weights_' + str(args.fiWeights) +  \
-                        '_features_' + str(args.fiFeats)     
+                        '_layer_' + str(args.layer)
+                if args.bit is not None:
+                        ret += '_bit_' + str(args.bit)
+                else:
+                        ret += '_bit_random'
+                if args.fiEpoch is not None:
+                        ret +=  '_epoch_' + str(args.fiEpoch)
+                if args.fiWeights:
+                        ret += '_weights'
+                if args.fiFeats:
+                        ret += '_features'         
+                ret += '_iter_' + str(args.iter)
                 return ret
         else:
                 return dataType + '_golden'
-        
+
+      
 def saveRecord(fidPrefixName, record):
         import pickle
         fname = fidPrefixName + "_record.pkl" 
@@ -287,6 +296,11 @@ class Record(object):
                         test_losses (1d array): array of losses obtained during each epoch of a model during testing phase
                         
                         test_accs (1d array): array of accuracies obtained during each epoch of a model during testing phase
+                        
+                        bleu_scores (1d array): array of bleu scores obtained during each iteration of GNMTv2 model during testing phase
+                        
+                        bleu_score_avg (float): float number representing the final average of bleu scores obtained during all iteration 
+                        of GNMTv2 model during testing phase
                 """
 
                 self.model = model
@@ -319,6 +333,10 @@ class Record(object):
                 self.test_losses = []
                 self.test_accs = []
                 
+                # GNMT data
+                self.bleu_scores = []
+                self.bleu_score_avg = 0
+                
 
         def addScores(self, tensors):
                 self.scores.append(tensors.cpu())
@@ -334,6 +352,9 @@ class Record(object):
                 for val in arr:
                         self.targetsGoldenFaulty.append(val)
 
+        def addBleuScores(self, score):
+                self.bleu_scores.append(score)
+                
         def addFiBit(self, bit):
                 # pass
                 self.fiBit.append(bit)
@@ -354,6 +375,9 @@ class Record(object):
                 self.acc1 = acc1
                 self.acc5 = acc5
 
+        def setBleuScoreAvg(self, score):
+                self.bleu_score_avg = score
+                
         def addTrainLosses(self, losses):
                 self.train_losses += losses
                 
