@@ -15,11 +15,12 @@ EXP_RUN=gnmtv2.py
 queue=skl
 nodes=1
 cpus=16
+mem=8gb
 
 # Experiments configurations
 model=gnmtv2
 niters=5
-nlayers=93
+nlayers=77
 bit="random"
 location="weights"
 
@@ -49,8 +50,8 @@ do
 
     echo 'Submiting job... '
 
-    echo "qsub -V -q ${queue} -lselect=${nodes}:ncpus=${cpus} -N ${experiment} -o ${experiment_out_path}/${experiment}.out -e ${experiment_out_path}/${experiment}.err -- ${JOB_PATH} ${EXP_PATH} ${EXP_RUN} ${PROJECT} ${DATASET_PATH} ${FLAGS_GOLDEN}"
-    qsub -V -q ${queue} -lselect=${nodes}:ncpus=${cpus} -N ${experiment} -o ${experiment_out_path}/${experiment}.out -e ${experiment_out_path}/${experiment}.err -- ${JOB_PATH} ${EXP_PATH} ${EXP_RUN} ${PROJECT} ${DATASET_PATH} "${FLAGS_GOLDEN}" 
+    echo "qsub -V -q ${queue} -lselect=${nodes}:ncpus=${cpus}:mem=${mem} -N ${experiment} -o ${experiment_out_path}/${experiment}.out -e ${experiment_out_path}/${experiment}.err -- ${JOB_PATH} ${EXP_PATH} ${EXP_RUN} ${PROJECT} ${DATASET_PATH} ${FLAGS_GOLDEN}"
+    qsub -V -q ${queue} -lselect=${nodes}:ncpus=${cpus}:mem=${mem} -N ${experiment} -o ${experiment_out_path}/${experiment}.out -e ${experiment_out_path}/${experiment}.err -- ${JOB_PATH} ${EXP_PATH} ${EXP_RUN} ${PROJECT} ${DATASET_PATH} "${FLAGS_GOLDEN}" 
 
     echo "Job submitted."
 
@@ -67,8 +68,8 @@ do
 
             echo 'Submiting job... '
 
-            echo "qsub -V -q ${queue} -lselect=${nodes}:ncpus=${cpus} -N ${experiment} -o ${experiment_out_path}/${experiment}.out -e ${experiment_out_path}/${experiment}.err -- ${JOB_PATH} ${EXP_PATH} ${EXP_RUN} ${PROJECT} ${DATASET_PATH} ${FLAGS_FAULTY}"
-            qsub -V -q ${queue} -lselect=${nodes}:ncpus=${cpus} -N ${experiment} -o ${experiment_out_path}/${experiment}.out -e ${experiment_out_path}/${experiment}.err -- ${JOB_PATH} ${EXP_PATH} ${EXP_RUN} ${PROJECT} ${DATASET_PATH} "${FLAGS_FAULTY}" 
+            echo "qsub -V -q ${queue} -lselect=${nodes}:ncpus=${cpus}:mem=${mem} -N ${experiment} -o ${experiment_out_path}/${experiment}.out -e ${experiment_out_path}/${experiment}.err -- ${JOB_PATH} ${EXP_PATH} ${EXP_RUN} ${PROJECT} ${DATASET_PATH} ${FLAGS_FAULTY}"
+            qsub -V -q ${queue} -lselect=${nodes}:ncpus=${cpus}:mem=${mem} -N ${experiment} -o ${experiment_out_path}/${experiment}.out -e ${experiment_out_path}/${experiment}.err -- ${JOB_PATH} ${EXP_PATH} ${EXP_RUN} ${PROJECT} ${DATASET_PATH} "${FLAGS_FAULTY}" 
 
             echo "Job submitted."
         done
