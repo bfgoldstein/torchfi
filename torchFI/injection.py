@@ -15,21 +15,11 @@ from util import *
 
 class FI(object):
 
-    def __init__(self, model, record=None, fiMode=False, fiBit=None, fiepoch=None, fiLayer=0, 
-                 fiFeatures=True, fiWeights=True, quantMode=False, quantType=LinearQuantMode.SYMMETRIC, 
-                 quantBitFeats=8, quantBitWts=8, quantBitAccum=32, quantClip=False, quantChannel=False, 
-                 log=False):
+    def __init__(self, model, record=None, fiMode=False, fiBit=None, fiepoch=None, 
+                 fiLayer=0, fiFeatures=True, fiWeights=True, log=False):
         self.model = model
         self.record = record
         self.log = log
-
-        self.quantizationMode = quantMode
-        self.quantizationType = LinearQuantMode[quantType]
-        self.quantizationBitWeights = quantBitWts
-        self.quantizationBitFeatures = quantBitFeats
-        self.quantizationBitAccum = quantBitAccum
-        self.quantizationClip = quantClip
-        self.quantizationChannel = quantChannel
         
         self.injectionMode = fiMode
         self.injectionLayer = fiLayer
@@ -67,7 +57,6 @@ class FI(object):
             indices, faulty_val = self.inject(tensorData)
             faulty_res.append(([batch_idx] + indices, faulty_val))
         
-        
         return faulty_res           
 
     def injectWeights(self, tensorData, tensorShape):
@@ -77,14 +66,14 @@ class FI(object):
 
         indices, data_val = getDataFromRandomIndex(data)
         
-        while data_val == 0.0:
-            indices, data_val = getDataFromRandomIndex(data)
+        # while data_val == 0.0:
+        #     indices, data_val = getDataFromRandomIndex(data)
 
         if self.log:
             logInjectionNode("Node index:", indices)
 
         faulty_val, bit = bitFlip(data_val, 
-                                  size=(self.quantizationBitWeights if self.injectionWeights else self.quantizationBitFeatures), 
+                                  size=(self.quantizationBitWeights if self.injectionWeights else self.quantizationBitActivations), 
                                   bit=self.injectionBit, log=self.log, quantized=self.quantizationMode) 
         
         self.injectionMode = False
@@ -105,6 +94,13 @@ class FI(object):
     def setInjectionLayer(self, layer):
         self.injectionLayer = layer
 
+    def setQuantParams(self, args):
+        self.quantizationMode = True
+        self.quantizationType = args.quant_mode
+        self.quantizationBitActivations = args.quant_bacts
+        self.quantizationBitWeights = args.quant_bwts
+        self.quantizationBitAccum = args.quant_baccum
+        
     def has_children(self, module):
         try:
             next(module.children())
@@ -125,12 +121,8 @@ class FI(object):
         self.record.addFiLocation(location)
 
     def fillFacotry(self):
-        if self.quantizationMode:
-            self.factory[nn.Conv2d] = QFIConv2d
-            self.factory[nn.Linear] = QFILinear
-        else:
-            self.factory[nn.Conv2d] = FIConv2d
-            self.factory[nn.Linear] = FILinear
+        self.factory[nn.Conv2d] = FIConv2d
+        self.factory[nn.Linear] = FILinear
         self.factory[nn.LSTM] = FILSTM
         self.factory[nn.LSTMCell] = FILSTMCell
         self.factory[nn.Embedding] = FIEmbedding

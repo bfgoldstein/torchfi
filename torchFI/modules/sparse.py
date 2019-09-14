@@ -3,9 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from util.quantization import *
 from util.log import *
-
 
 class FIEmbedding(nn.Embedding):
     def __init__(self, fi, name, num_embeddings, embedding_dim, padding_idx=None,

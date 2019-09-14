@@ -1,5 +1,6 @@
 import argparse
 import torchvision.models as models
+from distiller.quantization.range_linear import *
 
 
 def getModelNames():
@@ -115,25 +116,52 @@ def getParser():
 
     #####
     ##  Quantization Arguments
+    ## 
+    ##  Quantization is provided by Distiller package;
+    ##  Arguments follow the same strategy presented in range_linear.py
+    ##  but changing the arguments names to follow torchFI pattern;
+    ##  
     #####
+    
+    str_to_quant_mode_map = {'sym': LinearQuantMode.SYMMETRIC,
+                             'asym_s': LinearQuantMode.ASYMMETRIC_SIGNED,
+                             'asym_u': LinearQuantMode.ASYMMETRIC_UNSIGNED}
+
+    str_to_clip_mode_map = {'none': ClipMode.NONE, 'avg': ClipMode.AVG, 'n_std': ClipMode.N_STD}
+
+    def from_dict(d, val_str):
+        try:
+            return d[val_str]
+        except KeyError:
+            raise argparse.ArgumentTypeError('Must be one of {0} (received {1})'.format(list(d.keys()), val_str))
+
+    linear_quant_mode_str = partial(from_dict, str_to_quant_mode_map)
+    clip_mode_str = partial(from_dict, str_to_clip_mode_map)
     
     quantization_group = parser.add_argument_group('Arguments for post-training quantization control')
 
     quantization_group.add_argument('--quantize', dest='quantize', action='store_true',
                                     help='apply quantization to model')
-    quantization_group.add_argument('--quant-type', dest='quant_type', default='SYMMETRIC', type=str,
-                                    help='Type of quantization: "sym", "asym_u", "asym_s"')
-    quantization_group.add_argument('--quant-feats', dest='quant_bfeats', default=8, type=int,
+    quantization_group.add_argument('--quant-mode', dest='quant_mode', type=linear_quant_mode_str, default='sym',
+                                    help='linear quantization mode. Choices: ' + ' | '.join(str_to_quant_mode_map.keys()))
+    quantization_group.add_argument('--quant-bits-acts', dest='quant_bacts', default=8, type=int, metavar='NUM_BITS',
                                     help='# of bits to quantize features')
-    quantization_group.add_argument('--quant-wts', dest='quant_bwts', default=8, type=int,
+    quantization_group.add_argument('--quant-bits-wts', dest='quant_bwts', default=8, type=int, metavar='NUM_BITS',
                                     help='# of bits to quantize weights')
-    quantization_group.add_argument('--quant-accum', dest='quant_baccum', default=32, type=int,
+    quantization_group.add_argument('--quant-bits-accum', dest='quant_baccum', default=32, type=int, metavar='NUM_BITS',
                                     help='# of bits of accumulator used during quantization')
-    quantization_group.add_argument('--quant-clip', dest='quant_clip', action='store_true',
-                                    help='enable clipping of features during quantization')
-    quantization_group.add_argument('--quant-channel', dest='quant_channel', action='store_true',
-                                    help='enable per-channel quantization of weights')
-
+    quantization_group.add_argument('--quant-clip-acts', dest='quant_cacts', type=clip_mode_str, default='none',
+                                    help='Activations clipping mode. Choices: ' + ' | '.join(str_to_clip_mode_map.keys()))
+    quantization_group.add_argument('--quant-clip-n-stds', dest='quant_cnstds', type=float, 
+                                    help='When quant-clip-acts is set to \'n_std\', this is the number of standard deviations to use')
+    quantization_group.add_argument('--quant-no-clip-layers', dest='quant_noclip_layers', type=str, nargs='+', metavar='LAYER_NAME', default=[], 
+                                    help='List of layer names for which not to clip activations. Applicable only if --quant-clip-acts is not \'none\'')
+    quantization_group.add_argument('--quant-per-channel', dest='quant_channel', action='store_true', 
+                                    help='Enable per-channel quantization of weights (per output channel)')
+    quantization_group.add_argument('--quant-scale-approx-bits', dest='quant_scalebits', type=int, metavar='NUM_BITS', 
+                                    help='Enables scale factor approximation using integer multiply + bit shift, using this number of bits the integer multiplier')
+    quantization_group.add_argument('--quant-stats-file', type=str, metavar='PATH', 
+                                    help='Path to YAML file with calibration stats. If not given, dynamic quantization will be run (Note that not all layer types are supported for dynamic quantization)')
 
     #####
     ##  Pruning Arguments

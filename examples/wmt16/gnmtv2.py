@@ -51,13 +51,13 @@ import seq2seq.data.config as config
 from seq2seq.data.dataset import ParallelDataset
 from seq2seq.utils import AverageMeter
 
-# import ptvsd
+import ptvsd
 
-# # Allow other computers to attach to ptvsd at this IP address and port.
-# ptvsd.enable_attach(address=('10.190.0.3', 8097), redirect_output=True)
+# Allow other computers to attach to ptvsd at this IP address and port.
+ptvsd.enable_attach(address=('10.190.0.3', 8097), redirect_output=True)
 
-# # Pause the program until a remote debugger is attached
-# ptvsd.wait_for_attach()
+# Pause the program until a remote debugger is attached
+ptvsd.wait_for_attach()
 
 
 def grouper(iterable, size, fillvalue=None):
@@ -159,11 +159,12 @@ def main():
     # torch.cuda.empty_cache()
     
     if args.record_prefix is not None:
-        record = Record('GNMTv2', batch_size=args.batch_size, injection=args.injection, fiLayer=args.layer, fiFeatures=args.fiFeats, fiWeights=args.fiWeights)
+        record = Record('GNMTv2', batch_size=args.batch_size, injection=args.injection, fiLayer=args.layer, 
+                        fiFeatures=args.fiFeats, fiWeights=args.fiWeights)
     # Faulty Run
     if args.faulty:
         fi = FI(model, record=record, fiMode=args.injection, fiLayer=args.layer, fiBit=args.bit, 
-                fiFeatures=args.fiFeats, fiWeights=args.fiWeights, quantType='SYMMETRIC')
+                fiFeatures=args.fiFeats, fiWeights=args.fiWeights, log=args.log)
         
         traverse_time = AverageMeter()
         start = time.time()
@@ -178,13 +179,43 @@ def main():
         import distiller.modules as dist
         model = dist.convert_model_to_distiller_lstm(model)
     
+    
+    if args.quantize:
+        overrides_yaml = """
+        .*att_rnn.attn.*:
+            clip_acts: NONE # Quantize without clipping
+        decoder.classifier.classifier:
+            clip_acts: NONE # Quantize without clipping
+        """
+        from distiller.utils import yaml_ordered_load
+        overrides = yaml_ordered_load(overrides_yaml)    # Basic quantizer defintion
+        
+        stats_file = '/home/bfgoldstein/torchfi/examples/wmt16/model_stats.yaml'
+        
+        quantizer = tfi.FIPostTraLinearQuantizer(model,
+                                                mode=args.quant_mode,
+                                                bits_activations=args.quant_bacts,
+                                                bits_parameters=args.quant_bwts,
+                                                bits_accum=args.quant_baccum,
+                                                per_channel_wts=args.quant_channel,
+                                                clip_acts=args.quant_cacts,
+                                                model_activation_stats=args.quant_stats_file,
+                                                overrides=overrides,
+                                                clip_n_stds=args.quant_cnstds,
+                                                scale_approx_mult_bits=args.quant_scalebits)
+        quantizer.prepare_model()   
+        # model = quantizer.model
+        if args.faulty:
+            fi.setQuantParams(args)
+
+    print(model._modules.items())
+
     # Setting model to evaluation mode and cuda (if enabled) after FI traverse
     model.eval()
     if args.gpu is not None:
         model = model.cuda()
         
-    print(model._modules.items())
-    
+        
     test_file = open(args.record_prefix + getRecordPrefix(args, 'fp32', faulty=args.faulty) +
                       ".tok", 'w', encoding='UTF-8')
 
@@ -336,12 +367,15 @@ def displayConfig(args):
     logConfig("model", "{}".format("GNMTv2"))
     logConfig("quantization", "{}".format(args.quantize))
     if args.quantize:
-        logConfig("mode", "{}".format(args.quant_type))
-        logConfig("# bits features", "{}".format(args.quant_bfeats))
+        logConfig("mode", "{}".format(args.quant_mode))
+        logConfig("# bits features", "{}".format(args.quant_bacts))
         logConfig("# bits weights", "{}".format(args.quant_bwts))
         logConfig("# bits accumulator", "{}".format(args.quant_baccum))
-        logConfig("clip", "{}".format(args.quant_clip))
-        logConfig("per-channel", "{}".format(args.quant_channel))
+        logConfig("clip-acts", "{}".format(args.quant_cacts))
+        logConfig("per-channel-weights", "{}".format(args.quant_channel))
+        logConfig("model-activation-stats", "{}".format(args.quant_stats_file))
+        logConfig("clip-n-stds", "{}".format(args.quant_cnstds))
+        logConfig("scale-approx-mult-bits", "{}".format(args.quant_scalebits))
     logConfig("injection", "{}".format(args.injection))
     if args.injection:
         logConfig("layer", "{}".format(args.layer))
@@ -356,8 +390,8 @@ def displayConfig(args):
     if args.pruned:
         logConfig("checkpoint from ", "{}".format(args.pruned_file))
     logConfig("batch size", "{}".format(args.batch_size))
-
-
+    
+    
 def detokenizeFile(args):
     test_path = args.record_prefix + getRecordPrefix(args, 'fp32', faulty=args.faulty)
     # run moses detokenizer
