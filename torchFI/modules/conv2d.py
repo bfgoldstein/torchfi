@@ -77,23 +77,23 @@ class FIConv2d(nn.Conv2d):
         else:
             return super(FIConv2d, self).forward(input)
 
-        @staticmethod
-        def from_pytorch_impl(fi, name, conv2d: nn.Conv2d):
-            return FIConv2d(fi, name, conv2d.in_channels, conv2d.out_channels, conv2d.kernel_size, 
-                                       conv2d.stride, conv2d.padding, conv2d.dilation, conv2d.groups, 
-                                       conv2d.padding_mode, conv2d.weight, conv2d.bias)
+    @staticmethod
+    def from_pytorch_impl(fi, name, conv2d: nn.Conv2d):
+        return FIConv2d(fi, name, conv2d.in_channels, conv2d.out_channels, conv2d.kernel_size, 
+                                    conv2d.stride, conv2d.padding, conv2d.dilation, conv2d.groups, 
+                                    conv2d.padding_mode, conv2d.weight, conv2d.bias)
 
-        def __repr__(self):
-            return "%s(in_channels=%d, out_channels=%d, kernel_size=%d, stride=%d, padding=%d, " \
-                    "dilation=%d, groups=%d, padding_mode=%s, bias=%s, id=%d)" % (
-                    self.__class__.__name__,
-                    self.in_channels,
-                    self.out_channels,
-                    self.kernel_size,
-                    self.stride,
-                    self.padding,
-                    self.dilation,
-                    self.groups,
-                    self.padding_mode,
-                    str(True if self.bias is not None else False),
-                    self.id)
+    def __repr__(self):
+        return "{}(in_channels={}, out_channels={}, kernel_size={}, stride={}, padding={}, " \
+                "dilation={}, groups={}, padding_mode={}, bias={}, id={})".format(
+                self.__class__.__name__,
+                self.in_channels,
+                self.out_channels,
+                self.kernel_size,
+                self.stride,
+                self.padding,
+                self.dilation,
+                self.groups,
+                self.padding_mode,
+                str(True if self.bias is not None else False),
+                self.id)
