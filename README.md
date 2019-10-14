@@ -43,7 +43,8 @@ All pruned models to run the above experiments can be download at [DeGirum](http
 
 Please cite XXX in your publications if it helps your research:
 
-```@article{goldstein2019,
+```
+@article{goldstein2019,
   Author = {Goldstein, Brunno and Srinivasan, Sudarshan and Mellempudi, Naveen K and Das, Dipankar and Santiago, Leandro and Ferreira, Victor C. and Marzulo, Leandro A. J. and Solon, N. and Kundu, Sandip and França, Felipe M. G.},
   Journal = {},
   Title = {Reliability Evaluation of Compressed DeepLearning Models},
