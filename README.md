@@ -1,4 +1,5 @@
-# TorchFI
+![TorchFI Logo](https://github.com/bfgoldstein/torchfi/blob/master/docs/img/torchfi-logo.png)
+
 --------------------------------------------------------------------------------
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/bfgoldstein/torchfi/blob/master/LICENSE)
 
@@ -32,19 +33,23 @@ We highly recommend installing an [Anaconda](https://www.continuum.io/downloads)
 
 ## Examples/Experiments
 
-Check out [this](https://github.com/bfgoldstein/torchfi/tree/master/experiments) torchFI example using ResNet50 model.
+Check out [this](https://github.com/bfgoldstein/torchfi/tree/master/experiments) torchFI examples using AlexNet, ResNet18 and ResNet50 model.
+
+### Pruned Models
+
+All pruned models to run the above experiments can be download at [DeGirum](https://github.com/DeGirum/pruned-models) and [Distiller](https://nervanasystems.github.io/distiller/model_zoo.html) Model Zoo.
+
 
 ## Citation
 
 Please cite XXX in your publications if it helps your research:
 
-    @article{,
-      Author = {Goldstein, Brunno and Srinivasan, Sudarshan and Mellempudi, Naveen K and Das, Dipankar 
-                and Marzulo, Leandro A. J. and Solon, Alexandre N. and Kundu, Sandip and França, Felipe M. G.},
-      Journal = {},
-      Title = {},
-      Year = {2019}
-    }
+@article{goldstein2019,
+  Author = {Goldstein, Brunno and Srinivasan, Sudarshan and Mellempudi, Naveen K and Das, Dipankar and Santiago, Leandro and Ferreira, Victor C. and Marzulo, Leandro A. J. and Solon, N. and Kundu, Sandip and França, Felipe M. G.},
+  Journal = {},
+  Title = {Reliability Evaluation of Compressed DeepLearning Models},
+  Year = {2019}
+}
 
 ## License
 
