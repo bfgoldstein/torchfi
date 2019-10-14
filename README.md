@@ -1,4 +1,4 @@
-![TorchFI Logo](https://github.com/bfgoldstein/torchfi/blob/master/docs/img/torchfi-logo.png)
+[![TorchFI Logo](https://github.com/bfgoldstein/torchfi/blob/master/docs/img/torchfi-logo.png)](https://github.com/bfgoldstein/torchfi)
 
 --------------------------------------------------------------------------------
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/bfgoldstein/torchfi/blob/master/LICENSE)
