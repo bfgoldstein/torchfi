@@ -1,4 +1,3 @@
-import numpy as np
 import os
 import sys
 import numpy as np
@@ -7,10 +6,21 @@ import pickle
 import torch
 
         
-def getRecordPrefix(args, dataType, faulty=False):
+def getRecordPrefix(args, faulty=False, quantized=False, pruned=False, pruned_rate=None):
+        dtype = 'fp32'
+        prune = ''
+        
+        if quantized:
+                dtype = 'int' + str(args.quant_bwts)
+        if pruned:
+                prune = '_pruned_' + str(int(pruned_rate)) + '_nocomp'
+                if args.prune_compensate:
+                        prune = '_pruned_' + str(int(pruned_rate))
+                
+        ret = dtype + prune
+        
         if faulty:
-                ret =  dataType + '_faulty' +           \
-                        '_layer_' + str(args.layer)
+                ret +=  '_faulty' + '_layer_' + str(args.layer)
                 if args.bit is not None:
                         ret += '_bit_' + str(args.bit)
                 else:
@@ -24,7 +34,7 @@ def getRecordPrefix(args, dataType, faulty=False):
                 ret += '_iter_' + str(args.iter)
                 return ret
         else:
-                return dataType + '_golden'
+                return ret + '_golden'
 
       
 def saveRecord(fidPrefixName, record):
@@ -377,7 +387,14 @@ class Record(object):
 
         def setBleuScoreAvg(self, score):
                 self.bleu_score_avg = score
-                
+
+        def setQuantParams(self, args):
+                self.quantization = True
+                self.quant_bfeats = args.quant_bacts
+                self.quant_bwts = args.quant_bwts
+                self.quant_baccum = args.quant_baccum
+                self.quant_type = args.quant_mode
+                                
         def addTrainLosses(self, losses):
                 self.train_losses += losses
                 

@@ -23,6 +23,8 @@ def getParser():
                         help='torchvision model architectures: ' +
                             ' | '.join(getModelNames()) +
                             ' (default: resnet18)')
+    parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
+                        help='evaluate model on validation set')
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -185,14 +187,12 @@ def getParser():
 
     gnmt_group = parser.add_argument_group('Arguments for model GNMT model')
 
-    gnmt_group.add_argument('--input', required=True,
-                            help='input file (tokenized)')
+    gnmt_group.add_argument('--input', help='input file (tokenized)')
     # Replaced by record-prefix
     # TODO: Add fixed prefix folder to save GNMT ouput, record, etc
     # gnmt_group.add_argument('--output', required=True,
     #                         help='output file (tokenized)')
-    gnmt_group.add_argument('--model', required=True,
-                            help='model checkpoint file')
+    gnmt_group.add_argument('--model', help='model checkpoint file')
     gnmt_group.add_argument('--reference', default=None,
                             help='full path to the file with reference \
                             translations (for sacrebleu)')

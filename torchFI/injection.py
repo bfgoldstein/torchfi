@@ -30,6 +30,12 @@ class FI(object):
         self.epoch = fiepoch
 
         self.numInjections = 0
+
+        self.quantizationMode = False
+        self.quantizationType = None
+        self.quantizationBitActivations = 8
+        self.quantizationBitWeights = 8
+        self.quantizationBitAccum = 32
         
         self.factory = {}
         self.fillFacotry()
@@ -66,8 +72,8 @@ class FI(object):
 
         indices, data_val = getDataFromRandomIndex(data)
         
-        # while data_val == 0.0:
-        #     indices, data_val = getDataFromRandomIndex(data)
+        while data_val == 0.0:
+            indices, data_val = getDataFromRandomIndex(data)
 
         if self.log:
             logInjectionNode("Node index:", indices)
